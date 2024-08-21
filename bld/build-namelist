@@ -2917,10 +2917,24 @@ if ($cfg->get('microphys') =~ /^mg/) {
     add_default($nl, 'micro_mg_berg_eff_factor');
     add_default($nl, 'nucleate_ice_incloud');
     add_default($nl, 'nucleate_ice_strat');
-
+    add_default($nl, 'micro_mg_accre_enhan_fact');
+    add_default($nl, 'micro_mg_autocon_fact');
+    add_default($nl, 'micro_mg_autocon_nd_exp');
+    add_default($nl, 'micro_mg_autocon_lwp_exp');
+    add_default($nl, 'micro_mg_homog_size');
+    add_default($nl, 'micro_mg_vtrmi_factor');
+    add_default($nl, 'micro_mg_effi_factor');
+    add_default($nl, 'micro_mg_iaccr_factor');
+    add_default($nl, 'micro_mg_max_nicons');
     # For CESM2, the decision was made to set micro_do_sb_physics to false
     add_default($nl, 'micro_do_sb_physics', 'val'=>'.false.');
 }
+add_default($nl, 'microp_aero_bulk_scale');
+add_default($nl, 'microp_aero_npccn_scale');
+add_default($nl, 'microp_aero_wsub_scale');
+add_default($nl, 'microp_aero_wsubi_scale');
+add_default($nl, 'microp_aero_wsub_min');
+add_default($nl, 'microp_aero_wsubi_min');
 
 # Ice nucleation options
 if (!$simple_phys) {
@@ -3008,6 +3022,12 @@ if ($clubb_sgs  =~ /$TRUE/io) {
    add_default($nl, 'clubb_C2rt');
    add_default($nl, 'clubb_C2thl');
    add_default($nl, 'clubb_C2rtthl');
+   add_default($nl, 'clubb_c6rt');
+   add_default($nl, 'clubb_c6rtb');
+   add_default($nl, 'clubb_c6rtc');
+   add_default($nl, 'clubb_c6thl');
+   add_default($nl, 'clubb_c6thlb');
+   add_default($nl, 'clubb_c6thlc');
    add_default($nl, 'clubb_C8');
    add_default($nl, 'clubb_C7');
    add_default($nl, 'clubb_C7b');
@@ -3016,6 +3036,10 @@ if ($clubb_sgs  =~ /$TRUE/io) {
    add_default($nl, 'clubb_l_lscale_plume_centered');
    add_default($nl, 'clubb_l_use_ice_latent');
    add_default($nl, 'clubb_do_liqsupersat');
+   add_default($nl, 'clubb_wpxp_L_thresh');
+   add_default($nl, 'clubb_detliq_rad');
+   add_default($nl, 'clubb_detice_rad');
+   add_default($nl, 'clubb_detphase_lowtemp');
 }
 
 # Tuning for wet scavenging of modal aerosols
@@ -3105,6 +3129,9 @@ if (!$simple_phys) {
     add_default($nl, 'zmconv_org');
     add_default($nl, 'zmconv_microp');
     add_default($nl, 'zmconv_num_cin');
+    add_default($nl, 'zmconv_dmpdz');
+    add_default($nl, 'zmconv_tiedke_add');
+    add_default($nl, 'zmconv_capelmt');
 }
 
 # moist convection rainwater coefficients
