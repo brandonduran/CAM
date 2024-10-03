@@ -1,0 +1,136 @@
+! Users should add all user specific namelist changes below in the form of 
+! namelist_var = new_namelist_value 
+ 
+
+cosp_passive=.true.
+cosp_lradar_sim=.true.
+cosp_llidar_sim=.true.
+
+&rad_cnst_nl
+ rad_diag_1            = 'A:Q:H2O', 'N:O2:O2', 'N:CO2:CO2', 'N:ozone:O3', 'N:N2O:N2O',
+    'N:CH4:CH4', 'N:CFC11:CFC11', 'N:CFC12:CFC12'
+/
+
+&camexp
+ bnd_topo   = '/glade/work/bduran/fv_0.9x1.25_nc3000_Nsw042_Nrs008_Co060_Fi001_ZR_sgh30_24km_GRNL_MERRA2_c171218.nc'
+ clubb_do_energyfix             = .false.
+ prescribed_ozone_cycle_yr      = 2000
+ prescribed_ozone_type          = 'CYCLICAL'
+ prescribed_strataero_cycle_yr  = 2000
+ prescribed_strataero_type      = 'CYCLICAL'
+ ch4vmr         = 1760.0e-9
+ co2vmr         = 367.0e-6
+ f11vmr         = 653.45e-12
+ f12vmr         = 535.0e-12
+ n2ovmr         = 316.0e-9 
+ empty_htapes = .true.
+ avgflag_pertape='A'
+ mfilt   = 1
+ nhtfrq = 0
+ fincl1 =
+ 'ADRAIN',
+'AWNC',
+'AWNI',
+'CLOUD',
+
+           
+  dust_emis_fact         = 0.7D0
+  soil_erod_file         = '/glade/u/home/mahowald/dst_source2x2tunedcam6-2x2-04062017.nc'
+
+  ext_frc_cycle_yr               = 1850
+  ext_frc_specifier              = 'H2O -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/H2O_emission_CH4_oxidationx2_elev_3DmonthlyL70_1850climoCMIP6piControl001_y21-50avg_1.9x2.5_c190308.nc',
+         'num_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_so4_a1_anthro-ene_vertical_1750-2015_1.9x2.5_c20170616.nc',
+         'num_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_a1_so4_contvolcano_vertical_850-5000_1.9x2.5_c20190417.nc',
+         'num_a2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_a2_so4_contvolcano_vertical_850-5000_1.9x2.5_c20190417.nc',
+         'SO2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SO2_contvolcano_vertical_850-5000_1.9x2.5_c20190417.nc',
+         'so4_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a1_anthro-ene_vertical_1750-2015_1.9x2.5_c20170616.nc',
+         'so4_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a1_contvolcano_vertical_850-5000_1.9x2.5_c20190417.nc',
+         'so4_a2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a2_contvolcano_vertical_850-5000_1.9x2.5_c20190417.nc'
+  ext_frc_type           = 'CYCLICAL'
+  srf_emis_cycle_yr              = 1850
+  srf_emis_specifier             = 'bc_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_bc_a4_anthro_surface_1750-2015_1.9x2.5_c20170608.nc',
+         'bc_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_bc_a4_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'DMS -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_DMS_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'DMS -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_DMS_other_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'num_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_so4_a1_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'num_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_so4_a1_anthro-ag-ship_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'num_a2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_so4_a2_anthro-res_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'num_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_bc_a4_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'num_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_bc_a4_anthro_surface_1750-2015_1.9x2.5_c20170608.nc',
+         'num_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_pom_a4_anthro_surface_1750-2015_1.9x2.5_c20170608.nc',
+         'num_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_num_pom_a4_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'pom_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_pom_a4_anthro_surface_1750-2015_1.9x2.5_c20170608.nc',
+         'pom_a4 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_pom_a4_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'SO2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SO2_anthro-ag-ship-res_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'SO2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SO2_anthro-ene_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'SO2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SO2_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'so4_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a1_anthro-ag-ship_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'so4_a1 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a1_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'so4_a2 -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_so4_a2_anthro-res_surface_1750-2015_1.9x2.5_c20170616.nc',
+         'SOAG -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SOAGx1.5_anthro_surface_1750-2015_1.9x2.5_c20170608.nc',
+         'SOAG -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SOAGx1.5_bb_surface_1750-2015_1.9x2.5_c20170322.nc',
+         'SOAG -> /glade/p/cesmdata/cseg/inputdata/atm/cam/chem/emis/CMIP6_emissions_1750_2015_2deg/emissions-cmip6_SOAGx1.5_biogenic_surface_1750-2015_1.9x2.5_c20170322.nc'
+  srf_emis_type          = 'CYCLICAL'
+
+/
+&metdata_nl
+ met_nudge_temp         = .false.
+ met_data_file          = '2019/MERRA2_0.9x1.25_20190101.nc'
+ met_data_path          = '/glade/p/cesmdata/cseg/inputdata/atm/cam/met/MERRA2/0.9x1.25'
+ met_filenames_list             = '/glade/p/cesmdata/cseg/inputdata/atm/cam/met/MERRA2/0.9x1.25/filenames_1980-2023_c240229.txt'
+ met_fix_mass           = .true.
+ met_qflx_factor                = 1.0
+ met_rlx_time           = 24.
+ met_srf_land           = .false.
+ met_srf_land_scale             = .true.
+ met_srf_nudge_flux             = .false.
+ met_srf_rad            = .false.
+ met_srf_refs           = .false.
+ met_srf_sst            = .true.
+ met_srf_tau            = .true.
+/
+cldfrc_dp1 = 0.1
+cldfrc_dp2 = 500.0
+clubb_C2rt = 1.0
+clubb_C6rt = 4.0
+clubb_C6rtb = 6.0
+clubb_C6thl = 4.0
+clubb_C6thlb = 6.0
+clubb_C8 = 4.2
+clubb_beta = 2.4
+clubb_c1 = 1.0
+clubb_c11 = 0.7
+clubb_c14 = 2.2
+clubb_c_K10 = 0.5
+clubb_gamma_coef = 0.308
+clubb_wpxp_L_thresh = 60.0
+dust_emis_fact = 0.7
+micro_mg_accre_enhan_fact = 1.0
+micro_mg_autocon_fact = 0.01
+micro_mg_autocon_lwp_exp = 2.47
+micro_mg_autocon_nd_exp = -1.1
+micro_mg_berg_eff_factor = 1.0
+micro_mg_dcs = 0.0005
+micro_mg_effi_factor = 1.0
+micro_mg_homog_size = 2.5e-05
+micro_mg_iaccr_factor = 1.0
+micro_mg_max_nicons = 100000000.0
+micro_mg_vtrmi_factor = 1.0
+microp_aero_npccn_scale = 1.0
+microp_aero_wsub_min = 0.2
+microp_aero_wsub_scale = 1.0
+microp_aero_wsubi_min = 0.001
+microp_aero_wsubi_scale = 1.0
+seasalt_emis_scale = 1.0
+sol_factb_interstitial = 0.1
+sol_factic_interstitial = 0.4
+zmconv_c0_lnd = 0.0075
+zmconv_c0_ocn = 0.03
+zmconv_capelmt = 70.0
+zmconv_dmpdz = -0.001
+zmconv_ke = 5e-06
+zmconv_ke_lnd = 1e-05
+zmconv_momcd = 0.7
+zmconv_momcu = 0.7
+zmconv_num_cin = 1
+zmconv_tiedke_add = 0.5
