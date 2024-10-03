@@ -5,7 +5,6 @@ components
 manage_externals.log
 src/physics/carma/base
 src/physics/clubb
-src/physics/cosp2/src
 src/physics/silhs
 src/physics/pumas
 src/dynamics/fv3/atmos_cubed_sphere
