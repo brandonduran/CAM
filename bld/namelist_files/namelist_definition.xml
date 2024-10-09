@@ -54,6 +54,122 @@
           that have only a small number of allowed values.
                                                                         -->
 
+<!-- PPE -->
+<entry id="clubb_c1" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+Limiting value of C1 when skewness of w (vertical velocity) is small in
+magnitude in the C1 skewness function.  Increasing the value of C1 increases the
+damping of CLUBB's wp2 (variance of vertical velocity).
+</entry>
+
+<entry id="clubb_wpxp_L_thresh" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+CLUBB tunable parameter - Lscale threshold: damp C6 and C7 (units: m)
+</entry>
+<entry id="micro_mg_accre_enhan_fact" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless ratio to increase the accretion process in microphysics as a method of accounting for unrepresented subgridscale variability.
+Default: 1
+</entry>
+<entry id="micro_mg_autocon_fact" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless ratio to directly scale the autoconversion process in microphysics as a method of accounting for unrepresented subgridscale variability. 
+Default: 0.01
+</entry>
+<entry id="micro_mg_autocon_nd_exp" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless exponent of cloud number condensation in the KK autoconversion parameterization equation. See Khairoutdinov and Kogan, 2002.
+Default: -1.1
+</entry>
+<entry id="micro_mg_effi_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless scaling factor for ice effective radius as seen by radiation. This scaling factor adjusts for sub-grid scale ice crystal shape variability.
+Default: 1.0
+</entry>
+<entry id="micro_mg_homog_size" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Mean volume radius of droplets used in the process of homogeneously freezing below -40C in (m). Default value is currently the previously assumed 25 microns.
+Default: 25.e-6 m
+</entry>
+<entry id="micro_mg_iaccr_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Ice accrete cloud droplet factor
+Default: 1
+</entry>
+<entry id="micro_mg_max_nicons" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Maximum allowed ice number concentration
+Default: 1.0e8
+</entry>
+<entry id="micro_mg_vtrmi_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless scaling factor for ice fall speed to account for sub-grid scale ice crystal shape variability.
+Default: 1.0
+</entry>
+<entry id="microp_aero_npccn_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+Unitless scaling factor for the activated number concentration of cloud condensation nuclei.
+Default: 1.0
+</entry>
+<entry id="microp_aero_wsub_min" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+Minimum subgrid vertical velocity for liquid droplets during aerosol activation with units of (m s-1).
+Default: 0.2 m s-1
+</entry>
+<entry id="microp_aero_wsub_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+Unitless scaling factor for the liquid droplet subgrid scale vertical velocity during aerosol activation.
+Default: 1.0
+</entry>
+<entry id="microp_aero_wsubi_min" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+Minimum subgrid vertical velocity for ice droplets during aerosol activation with units of (m s-1).
+Default: 0.001 m s-1
+</entry>
+<entry id="microp_aero_wsubi_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+Unitless scaling factor for ice droplet subgrid scale vertical velocity during aerosol activation.
+Default: 1.0
+</entry>
+<entry id="zmconv_capelmt" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+Tunable triggering threshold for convection in ZM deep scheme in units of (J kg-1).
+Default: 70.0 J kg-1
+</entry>
+<entry id="zmconv_dmpdz" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+Tunable entrainment rate in ZM deep convection scheme in units of (m-1).
+Default: -1.0e-3 m-1
+</entry>
+<entry id="zmconv_tiedke_add" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+Tunable parcel temperature perturbation in ZM deep convection scheme in units of (K).
+Default: 0.5K perturbation
+</entry>
+<entry id="micro_mg_autocon_lwp_exp" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+Unitless exponent of liquid water path in the KK autoconversion parameterization equation. See Khairoutdinov and Kogan, 2002.
+Default: 2.47
+</entry>
+<entry id="clubb_c6rt" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+CLUBB tunable parameter - Low Skewness in C6rt Skw. Function
+</entry>
+
+<entry id="clubb_c6rtb" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+CLUBB tunable parameter - High Skewness in C6rt Skw. Function
+</entry>
+<entry id="clubb_c6thl" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+CLUBB tunable parameter - Low Skewness in C6thl Skw. Function
+</entry>
+
+<entry id="clubb_c6thlb" type="real" category="pblrad"
+       group="clubb_params_nl" valid_values="" >
+CLUBB tunable parameter - High Skewness in C6thl Skw. Function
+</entry>
+
 <!-- Nudging Parameters -->
 
 <entry id="Nudge_Model" type="logical" category="nudging"

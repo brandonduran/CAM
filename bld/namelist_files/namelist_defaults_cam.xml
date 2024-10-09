@@ -23,6 +23,44 @@
 <dtime dyn="se"    hgrid="ne240np4">600 </dtime>
 <dtime dyn="se"    hgrid="ne0np4CONUS.ne30x8">600</dtime>
 
+<!-- PPE -->
+<clubb_c1                                         > 1.0     </clubb_c1>
+<clubb_wpxp_L_thresh                              > 60.0    </clubb_wpxp_L_thresh>
+<micro_mg_accre_enhan_fact                  >  1.D0    </micro_mg_accre_enhan_fact>
+<micro_mg_accre_enhan_fact microphys="mg2"  >  1.D0    </micro_mg_accre_enhan_fact>
+<micro_mg_autocon_fact                  >  0.01D0    </micro_mg_autocon_fact>
+<micro_mg_autocon_fact microphys="mg2"  >  0.01D0    </micro_mg_autocon_fact>
+<micro_mg_autocon_lwp_exp                  >  2.47D0    </micro_mg_autocon_lwp_exp>
+<micro_mg_autocon_lwp_exp microphys="mg2"  >  2.47D0    </micro_mg_autocon_lwp_exp>
+<micro_mg_autocon_nd_exp                  >  -1.1D0    </micro_mg_autocon_nd_exp>
+<micro_mg_autocon_nd_exp microphys="mg2"  >  -1.1D0    </micro_mg_autocon_nd_exp>
+<micro_mg_effi_factor                  >  1.D0    </micro_mg_effi_factor>
+<micro_mg_effi_factor microphys="mg2"  >  1.D0    </micro_mg_effi_factor>
+
+<micro_mg_iaccr_factor                  >  1.D0    </micro_mg_iaccr_factor>
+<micro_mg_iaccr_factor microphys="mg2"  >  1.D0    </micro_mg_iaccr_factor>
+<micro_mg_homog_size                  >  25.D-6    </micro_mg_homog_size>
+<micro_mg_homog_size  microphys="mg2"  >  25.D-6    </micro_mg_homog_size>
+<micro_mg_max_nicons                  >  1.D8    </micro_mg_max_nicons>
+<micro_mg_max_nicons  microphys="mg2"  > 1.D8    </micro_mg_max_nicons>
+<micro_mg_vtrmi_factor                  >  1.D0    </micro_mg_vtrmi_factor>
+<micro_mg_vtrmi_factor microphys="mg2"  >  1.D0    </micro_mg_vtrmi_factor>
+<microp_aero_npccn_scale                  >  1.D0    </microp_aero_npccn_scale>
+<microp_aero_npccn_scale microphys="mg2"  >  1.D0    </microp_aero_npccn_scale>
+<microp_aero_wsub_min                  >  0.2D0    </microp_aero_wsub_min>
+
+<microp_aero_wsubi_min                  >  0.001D0    </microp_aero_wsubi_min>
+<microp_aero_wsub_scale                  >  1.D0    </microp_aero_wsub_scale>
+
+<microp_aero_wsubi_scale                  >  1.D0    </microp_aero_wsubi_scale>
+<zmconv_capelmt                                                       > 70.0    </zmconv_capelmt>
+<zmconv_dmpdz                                                         > -1.0E-3 </zmconv_dmpdz>
+<zmconv_tiedke_add                                                    > 0.5     </zmconv_tiedke_add>
+<clubb_c6rt                                       > 4.0     </clubb_c6rt>
+<clubb_c6rtb                                      > 6.0     </clubb_c6rtb>
+<clubb_c6thl                                      > 4.0     </clubb_c6thl>
+<clubb_c6thlb                                     > 6.0     </clubb_c6thlb>
+
 <!-- Initial conditions -->
 <!-- Vertical coordinates only, good for analytic initial conditions -->
 <ncdata nlev="26" analytic_ic="1" >atm/cam/inic/cam_vcoords_L26_c180105.nc</ncdata>
