@@ -518,6 +518,15 @@ contains
     type(file_desc_t) :: piofile
     character(len=shr_kind_cl) :: locfn
     logical :: lexist
+    if (len_trim(drydep_srf_file) == 0) then
+       write(iulog,*)'**************************************'
+       write(iulog,*)' get_landuse_and_soilw_from_file: INFO:'
+       write(iulog,*)' drydep_srf_file not set:'
+       write(iulog,*)' setting fraction_landuse to zero'
+       write(iulog,*)'**************************************'
+       fraction_landuse = 0._r8
+       return
+    end if
 
     call getfil (drydep_srf_file, locfn, 1, lexist)
     if(lexist) then
