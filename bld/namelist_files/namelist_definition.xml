@@ -2680,11 +2680,11 @@ Default: 0.1e6 m-3
 </entry>
 
 <!-- Aerosol microphysics -->
-<entry id="microp_aero_bulk_scale" type="real" category="microphys"
+<!-- PPE <entry id="microp_aero_bulk_scale" type="real" category="microphys"
        group="microp_aero_nl" valid_values="" >
 prescribed aerosol bulk sulfur scale factor
 Default: 2
-</entry>
+</entry> -->
 
 <entry id="use_hetfrz_classnuc" type="logical" category="microphys"
        group="phys_ctl_nl" valid_values="" >
