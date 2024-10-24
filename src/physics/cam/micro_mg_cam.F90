@@ -118,7 +118,20 @@ logical :: micro_mg_adjust_cpt  = .false.
 
 character(len=16) :: micro_mg_precip_frac_method = 'max_overlap' ! type of precipitation fraction method
 
-real(r8)          :: micro_mg_berg_eff_factor    = 1.0_r8        ! berg efficiency factor
+!real(r8)          :: micro_mg_berg_eff_factor    = 1.0_r8        ! berg efficiency factor
+
+!try ppe
+real(r8), parameter :: unset_r8 = huge(1.0_r8)
+real(r8)          :: micro_mg_accre_enhan_fact = unset_r8
+real(r8) :: micro_mg_autocon_fact      = unset_r8       ! autoconversion prefactor
+real(r8) :: micro_mg_autocon_nd_exp    = unset_r8       ! autoconversion nd exponent
+real(r8) :: micro_mg_autocon_lwp_exp   = unset_r8       ! autoconversion lwp exponent      
+real(r8) :: micro_mg_homog_size        = unset_r8     ! size of freezing homogeneous ice
+real(r8) :: micro_mg_vtrmi_factor      = unset_r8        ! ice fall speed factor
+real(r8) :: micro_mg_effi_factor       = unset_r8        ! ice effective radius factor
+real(r8) :: micro_mg_iaccr_factor      = unset_r8        ! ice accretion of cloud droplet
+real(r8) :: micro_mg_max_nicons        = unset_r8  ! max allowed ice number concentration
+real(r8) :: micro_mg_berg_eff_factor = unset_r8 ! berg efficiency factor
 
 logical, public :: do_cldliq ! Prognose cldliq flag
 logical, public :: do_cldice ! Prognose cldice flag
@@ -275,7 +288,10 @@ subroutine micro_mg_cam_readnl(nlfile)
        micro_mg_do_cldice, micro_mg_do_cldliq, micro_mg_num_steps, &
        microp_uniform, micro_mg_dcs, micro_mg_precip_frac_method,  &
        micro_mg_berg_eff_factor, micro_do_sb_physics, micro_mg_adjust_cpt, &
-       micro_mg_nccons, micro_mg_nicons, micro_mg_ncnst, micro_mg_ninst
+       micro_mg_nccons, micro_mg_nicons, micro_mg_ncnst, micro_mg_ninst, micro_mg_accre_enhan_fact, & !ppe
+       micro_mg_autocon_fact, micro_mg_autocon_nd_exp, micro_mg_autocon_lwp_exp, & !ppe
+       micro_mg_homog_size, micro_mg_vtrmi_factor, micro_mg_effi_factor, micro_mg_iaccr_factor, & !ppe
+       micro_mg_max_nicons !ppe
   !-----------------------------------------------------------------------------
 
   if (masterproc) then
@@ -366,6 +382,46 @@ subroutine micro_mg_cam_readnl(nlfile)
   call mpi_bcast(micro_mg_ninst, 1, mpi_real8, mstrid, mpicom, ierr)
   if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_ninst")
 
+!ppe
+  call mpi_bcast(micro_mg_accre_enhan_fact, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_accre_enhan_fact")
+
+  call mpi_bcast(micro_mg_autocon_fact, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_autocon_fact")
+
+  call mpi_bcast(micro_mg_autocon_nd_exp, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_autocon_nd_exp")
+
+  call mpi_bcast(micro_mg_autocon_lwp_exp, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_autocon_lwp_exp")
+
+  call mpi_bcast(micro_mg_homog_size, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_homog_size")
+
+  call mpi_bcast(micro_mg_vtrmi_factor, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_vtrmi_factor")
+
+  call mpi_bcast(micro_mg_effi_factor, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_effi_factor")
+
+  call mpi_bcast(micro_mg_iaccr_factor, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_iaccr_factor")
+
+  call mpi_bcast(micro_mg_max_nicons, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_max_nicons")
+
+  if(micro_mg_accre_enhan_fact == unset_r8) call endrun(sub//": FATAL: micro_mg_accre_enhan_fact is not set")
+
+  if(micro_mg_autocon_fact == unset_r8) call endrun(sub//": FATAL: micro_mg_autocon_fact is not set")
+  if(micro_mg_autocon_nd_exp == unset_r8) call endrun(sub//": FATAL: micro_mg_autocon_nd_exp is not set")
+  if(micro_mg_autocon_lwp_exp == unset_r8) call endrun(sub//": FATAL: micro_mg_autocon_lwp_exp is not set")
+  if(micro_mg_homog_size == unset_r8) call endrun(sub//": FATAL: micro_mg_homog_size is not set")
+  if(micro_mg_vtrmi_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_vtrmi_factor is not set")
+  if(micro_mg_effi_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_effi_factor is not set")
+  if(micro_mg_iaccr_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_iaccr_factor is not set")  
+  if(micro_mg_max_nicons == unset_r8) call endrun(sub//": FATAL: micro_mg_max_nicons is not set")
+  if(micro_mg_berg_eff_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_berg_eff_factor is not set")
+
   if (masterproc) then
 
      write(iulog,*) 'MG microphysics namelist:'
@@ -384,6 +440,15 @@ subroutine micro_mg_cam_readnl(nlfile)
      write(iulog,*) '  micro_mg_nicons             = ', micro_mg_nicons
      write(iulog,*) '  micro_mg_ncnst              = ', micro_mg_ncnst
      write(iulog,*) '  micro_mg_ninst              = ', micro_mg_ninst
+     write(iulog,*) '  micro_mg_accre_enhan_fact = ', micro_mg_accre_enhan_fact !ppe
+     write(iulog,*) '  micro_mg_autocon_fact       = ' , micro_mg_autocon_fact
+     write(iulog,*) '  micro_mg_autocon_nd_exp     = ' , micro_mg_autocon_nd_exp
+     write(iulog,*) '  micro_mg_autocon_lwp_exp    = ' , micro_mg_autocon_lwp_exp
+     write(iulog,*) '  micro_mg_homog_size         = ', micro_mg_homog_size
+     write(iulog,*) '  micro_mg_vtrmi_factor       = ', micro_mg_vtrmi_factor
+     write(iulog,*) '  micro_mg_effi_factor        = ', micro_mg_effi_factor
+     write(iulog,*) '  micro_mg_iaccr_factor       = ', micro_mg_iaccr_factor
+     write(iulog,*) '  micro_mg_max_nicons         = ', micro_mg_max_nicons
   end if
 
 contains
@@ -714,7 +779,10 @@ subroutine micro_mg_cam_init(pbuf2d)
               micro_mg_precip_frac_method, micro_mg_berg_eff_factor, &
               allow_sed_supersat, micro_do_sb_physics,          &
               micro_mg_nccons, micro_mg_nicons, micro_mg_ncnst, &
-              micro_mg_ninst, errstring)
+              micro_mg_ninst, micro_mg_accre_enhan_fact, &
+              micro_mg_autocon_fact , micro_mg_autocon_nd_exp, micro_mg_autocon_lwp_exp, micro_mg_homog_size, &
+              micro_mg_vtrmi_factor, micro_mg_effi_factor, micro_mg_iaccr_factor, &
+              micro_mg_max_nicons, errstring)!ppe
       end select
    end select
 

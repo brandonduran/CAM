@@ -224,6 +224,15 @@ real(r8) :: xxls_squared
 
 character(len=16)  :: micro_mg_precip_frac_method  ! type of precipitation fraction method
 real(r8)           :: micro_mg_berg_eff_factor     ! berg efficiency factor
+real(r8)           :: micro_mg_accre_enhan_fact
+real(r8)           :: micro_mg_autocon_fact
+real(r8)           :: micro_mg_autocon_nd_exp
+real(r8)           :: micro_mg_autocon_lwp_exp
+real(r8)           :: micro_mg_homog_size
+real(r8)           :: micro_mg_vtrmi_factor
+real(r8)           :: micro_mg_effi_factor
+real(r8)           :: micro_mg_iaccr_factor
+real(r8)           :: micro_mg_max_nicons
 
 logical  :: allow_sed_supersat ! Allow supersaturated conditions after sedimentation loop
 logical  :: do_sb_physics ! do SB 2001 autoconversion or accretion physics
@@ -239,7 +248,10 @@ subroutine micro_mg_init( &
      microp_uniform_in, do_cldice_in, use_hetfrz_classnuc_in, &
      micro_mg_precip_frac_method_in, micro_mg_berg_eff_factor_in, &
      allow_sed_supersat_in, do_sb_physics_in, &
-     nccons_in, nicons_in, ncnst_in, ninst_in, errstring)
+     nccons_in, nicons_in, ncnst_in, ninst_in, micro_mg_accre_enhan_fact_in, & !ppe
+     micro_mg_autocon_fact_in, micro_mg_autocon_nd_exp_in, micro_mg_autocon_lwp_exp_in, & !ppe
+     micro_mg_homog_size_in, micro_mg_vtrmi_factor_in, micro_mg_effi_factor_in, & !ppe
+     micro_mg_iaccr_factor_in, micro_mg_max_nicons_in, errstring)!ppe
 
   use micro_mg_utils, only: micro_mg_utils_init
 
@@ -272,6 +284,18 @@ subroutine micro_mg_init( &
 
   character(len=16),intent(in)  :: micro_mg_precip_frac_method_in  ! type of precipitation fraction method
   real(r8),         intent(in)  :: micro_mg_berg_eff_factor_in     ! berg efficiency factor
+!ppe
+  real(r8), intent(in)  ::  micro_mg_accre_enhan_fact_in
+  real(r8), intent(in)  :: micro_mg_autocon_fact_in
+  real(r8), intent(in) :: micro_mg_autocon_nd_exp_in
+  real(r8), intent(in) :: micro_mg_autocon_lwp_exp_in
+  real(r8), intent(in) :: micro_mg_homog_size_in
+  real(r8), intent(in) :: micro_mg_vtrmi_factor_in
+  real(r8), intent(in) :: micro_mg_effi_factor_in
+  real(r8), intent(in) :: micro_mg_iaccr_factor_in
+  real(r8), intent(in) :: micro_mg_max_nicons_in
+
+
   logical,  intent(in)  ::  allow_sed_supersat_in ! allow supersaturated conditions after sedimentation loop
   logical,  intent(in)  ::  do_sb_physics_in ! do SB autoconversion and accretion physics
 
@@ -302,6 +326,16 @@ subroutine micro_mg_init( &
   rhmini = rhmini_in
   micro_mg_precip_frac_method = micro_mg_precip_frac_method_in
   micro_mg_berg_eff_factor    = micro_mg_berg_eff_factor_in
+!ppe
+  micro_mg_accre_enhan_fact   = micro_mg_accre_enhan_fact_in
+  micro_mg_autocon_fact       = micro_mg_autocon_fact_in
+  micro_mg_autocon_lwp_exp    = micro_mg_autocon_lwp_exp_in
+  micro_mg_autocon_nd_exp     = micro_mg_autocon_nd_exp_in
+  micro_mg_effi_factor        = micro_mg_effi_factor_in
+  micro_mg_iaccr_factor       = micro_mg_iaccr_factor_in
+  micro_mg_max_nicons         = micro_mg_max_nicons_in
+  micro_mg_vtrmi_factor       = micro_mg_vtrmi_factor_in
+!ppe
   allow_sed_supersat          = allow_sed_supersat_in
   do_sb_physics               = do_sb_physics_in
 

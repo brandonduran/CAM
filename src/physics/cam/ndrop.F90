@@ -508,6 +508,9 @@ subroutine dropmixnuc( &
 
    factnum = 0._r8
    wtke = 0._r8
+!ppe
+   tendnd = 0._r8
+!ppe
 
    if (prog_modal_aero) then
       ! aerosol tendencies
