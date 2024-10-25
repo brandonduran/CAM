@@ -135,7 +135,6 @@ Default: 0.001 m s-1
 Unitless scaling factor for ice droplet subgrid scale vertical velocity during aerosol activation.
 Default: 1.0
 </entry>
-
 <!-- Nudging Parameters -->
 
 <entry id="Nudge_Model" type="logical" category="nudging"
