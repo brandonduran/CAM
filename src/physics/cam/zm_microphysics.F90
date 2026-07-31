@@ -551,7 +551,12 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
   real(r8) :: nidep(pcols,pver)     !number conc of ice nuclei due to deoposion nucleation (hetero nuc) (1/m3)
   real(r8) :: niimm(pcols,pver)     !number conc of ice nuclei due to immersion freezing (hetero nuc) (1/m3)
 
-  real(r8) :: wpice, weff, fhom      ! unused dummies  
+! ppe
+  real(r8) :: o1(pcols,pver)
+  real(r8) :: o2(pcols,pver)
+  real(r8) :: o3(pcols,pver)
+
+  real(r8) :: wpice, weff, fhom      ! unused dummies
 
 ! loop array variables
   integer i,k, n, l
@@ -681,7 +686,11 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
         nimey(i,k) = 0._r8
         nihf(i,k)  = 0._r8
         nidep(i,k) = 0._r8
-        niimm(i,k) = 0._r8  
+        niimm(i,k) = 0._r8
+! ppe
+        o1(i,k) = 0._r8
+        o2(i,k) = 0._r8
+        o3(i,k) = 0._r8
         fhmrm(i,k) = 0._r8
 
         autolm(i,k) = 0._r8
@@ -1603,7 +1612,8 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
                        wu(i,k), t(i,k), ph(i,k), relhum(i,k), 1.0_r8, qcic(i,k), &
                        1.0e-20_r8, 0.0_r8, rho(i,k), so4_num, dst_num, soot_num, 1.0_r8, &
                        dum2i(i,k), nihf(i,k), niimm(i,k), nidep(i,k), nimey(i,k),   &
-                       wpice, weff, fhom, temp1, temp2, temp3, temp4, .true.   )
+                       wpice, weff, fhom, temp1, temp2, temp3, temp4, & !ppe
+                       o1(i,k), o2(i,k), o3(i,k), .true.   )
                  end if   
                  nihf(i,k)=nihf(i,k)*rho(i,k)           !  convert from #/kg -> #/m3)
                  niimm(i,k)=niimm(i,k)*rho(i,k)

@@ -212,6 +212,10 @@ subroutine nucleate_ice_cam_init(mincld_in, bulk_scale_in)
    call addfld('NIDEP', (/ 'lev' /), 'A', '1/m3', 'Activated Ice Number Concentation due to deposition nucleation')
    call addfld('NIIMM', (/ 'lev' /), 'A', '1/m3', 'Activated Ice Number Concentation due to immersion freezing')
    call addfld('NIMEY', (/ 'lev' /), 'A', '1/m3', 'Activated Ice Number Concentation due to meyers deposition')
+   ! ppe
+   call addfld('O1',  (/ 'lev' /), 'A', '1/m3', 'so4_num used in nucleate_ice')
+   call addfld('O2',  (/ 'lev' /), 'A', '1/m3', 'dst_num used in nucleate_ice')
+   call addfld('O3O',  (/ 'lev' /), 'A', '1/m3', 'qc used in nucleate_ice')
 
    call addfld('NIREGM',(/ 'lev' /), 'A', 'C', 'Ice Nucleation Temperature Threshold for Regime')
    call addfld('NISUBGRID',(/ 'lev' /), 'A', '', 'Ice Nucleation subgrid saturation factor')
@@ -475,6 +479,11 @@ subroutine nucleate_ice_cam_calc( &
    real(r8) :: nimey(pcols,pver) !output number conc of ice nuclei due to meyers deposition (1/m3)
    real(r8) :: regm(pcols,pver)  !output temperature thershold for nucleation regime
 
+   ! BD
+   real(r8) :: o1(pcols,pver)
+   real(r8) :: o2(pcols,pver)
+   real(r8) :: o3(pcols,pver)
+
 
    !-------------------------------------------------------------------------------
 
@@ -582,8 +591,11 @@ subroutine nucleate_ice_cam_calc( &
    ! initialize history output fields for ice nucleation
    nihf(1:ncol,1:pver)  = 0._r8  
    niimm(1:ncol,1:pver) = 0._r8  
-   nidep(1:ncol,1:pver) = 0._r8 
-   nimey(1:ncol,1:pver) = 0._r8 
+   nidep(1:ncol,1:pver) = 0._r8
+   nimey(1:ncol,1:pver) = 0._r8
+   o1(1:ncol,1:pver) = 0._r8
+   o2(1:ncol,1:pver) = 0._r8
+   o3(1:ncol,1:pver) = 0._r8
 
    if (use_preexisting_ice) then
       fhom(:,:)     = 0.0_r8
@@ -723,7 +735,8 @@ subroutine nucleate_ice_cam_calc( &
                so4_num, dst_num, soot_num, subgrid(i,k),                 &
                naai(i,k), nihf(i,k), niimm(i,k), nidep(i,k), nimey(i,k), &
                wice(i,k), weff(i,k), fhom(i,k), regm(i,k),               &
-               oso4_num, odst_num, osoot_num)
+               oso4_num, odst_num, osoot_num, & !) ppe
+               o1(i,k), o2(i,k), o3(i,k))
 
             ! Move aerosol used for nucleation from interstial to cloudborne, 
             ! otherwise the same coarse mode aerosols will be available again
@@ -834,6 +847,9 @@ subroutine nucleate_ice_cam_calc( &
    call outfld('NIREGM', regm, pcols, lchnk)
    call outfld('NISUBGRID', subgrid, pcols, lchnk)
    call outfld('NITROP_PD', trop_pd, pcols, lchnk)
+   call outfld('O1', o1, pcols,lchnk)
+   call outfld('O2', o2, pcols,lchnk)
+   call outfld('O3O', o3, pcols, lchnk)
 
    if (use_preexisting_ice) then
       call outfld( 'fhom' , fhom, pcols, lchnk)

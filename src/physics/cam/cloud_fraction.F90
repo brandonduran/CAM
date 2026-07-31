@@ -235,6 +235,7 @@ subroutine cldfrc_init
 
    call addfld ('SH_CLD', (/ 'lev' /), 'A', 'fraction', 'Shallow convective cloud cover' )
    call addfld ('DP_CLD', (/ 'lev' /), 'A', 'fraction', 'Deep convective cloud cover'    )
+   call addfld ('THETA', (/ 'lev' /), 'A', 'K', 'Potential Temperature'    )
 
 end subroutine cldfrc_init
 
@@ -730,6 +731,7 @@ subroutine cldfrc(lchnk   ,ncol    , pbuf,  &
 
     call outfld( 'SH_CLD  ', shallowcu   , pcols, lchnk )
     call outfld( 'DP_CLD  ', deepcu      , pcols, lchnk )
+    call outfld ('THETA', theta, pcols, lchnk )
 
     !
     return

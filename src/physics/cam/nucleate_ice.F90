@@ -90,7 +90,8 @@ subroutine nucleati(  &
    so4_num, dst_num, soot_num, subgrid, &
    nuci, onihf, oniimm, onidep, onimey, &
    wpice, weff, fhom, regm, &
-   oso4_num, odst_num, osoot_num, call_frm_zm_in)
+   oso4_num, odst_num, osoot_num, & ! call_frm_zm_in, & !) ppe
+   o1, o2, o3, call_frm_zm_in) ! ppe
 
    ! Input Arguments
    real(r8), intent(in) :: wbar        ! grid cell mean vertical velocity (m/s)
@@ -120,6 +121,9 @@ subroutine nucleati(  &
    real(r8), intent(out) :: oso4_num   ! so4 aerosol number (#/cm^3)
    real(r8), intent(out) :: odst_num   ! total dust aerosol number (#/cm^3)
    real(r8), intent(out) :: osoot_num  ! soot (hydrophilic) aerosol number (#/cm^3)
+   real(r8), intent(out) :: o1
+   real(r8), intent(out) :: o2
+   real(r8), intent(out) :: o3
 
    ! Optional Arguments
    logical,  intent(in), optional :: call_frm_zm_in ! true if called from ZM convection scheme
@@ -209,6 +213,10 @@ subroutine nucleati(  &
    oso4_num  = 0._r8
    odst_num  = 0._r8
    osoot_num = 0._r8
+
+   o1 = so4_num
+   o2 = dst_num
+   o3 = qc
 
    if ((so4_num >= 1.0e-10_r8 .or. (soot_num+dst_num) >= 1.0e-10_r8) .and. cldn > 0._r8) then
 
