@@ -2572,11 +2572,96 @@ In-cloud ice number concentration when micro_mg_nicons=.true.
 Default: 0.1e6 m-3
 </entry>
 
+<!-- PPE microphysics tuning knobs -->
+<entry id="micro_mg_accre_enhan_fact" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable scale factor on accretion of cloud water by rain.
+Default: 1.0
+</entry>
+
+<entry id="micro_mg_autocon_fact" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable autoconversion prefactor.
+Default: 0.01
+</entry>
+
+<entry id="micro_mg_autocon_nd_exp" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable autoconversion droplet-number exponent.
+Default: -1.1
+</entry>
+
+<entry id="micro_mg_autocon_lwp_exp" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable autoconversion liquid-water-path exponent.
+Default: 2.47
+</entry>
+
+<entry id="micro_mg_homog_size" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable assumed mean volume radius of homogeneously frozen droplets.
+Default: 25.D-6 m
+</entry>
+
+<entry id="micro_mg_vtrmi_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable scale factor on ice/snow mass-weighted fallspeed.
+Default: 1.0
+</entry>
+
+<entry id="micro_mg_effi_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable scale factor on cloud ice effective radius.
+Default: 1.0
+</entry>
+
+<entry id="micro_mg_iaccr_factor" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable scale factor on accretion of cloud water by snow.
+Default: 1.0
+</entry>
+
+<entry id="micro_mg_max_nicons" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable max allowed ice number concentration.
+Default: 1.D8 m-3
+</entry>
+
 <!-- Aerosol microphysics -->
 <entry id="microp_aero_bulk_scale" type="real" category="microphys"
        group="microp_aero_nl" valid_values="" >
 prescribed aerosol bulk sulfur scale factor
 Default: 2
+</entry>
+
+<entry id="microp_aero_npccn_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+PPE-tunable scale factor on activated droplet number (npccn).
+Default: 1.0
+</entry>
+
+<entry id="microp_aero_wsub_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+PPE-tunable scale factor on sub-grid vertical velocity (liquid).
+Default: 1.0
+</entry>
+
+<entry id="microp_aero_wsubi_scale" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+PPE-tunable scale factor on sub-grid vertical velocity (ice).
+Default: 1.0
+</entry>
+
+<entry id="microp_aero_wsub_min" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+PPE-tunable minimum sub-grid vertical velocity (liquid).
+Default: 0.2 m/s
+</entry>
+
+<entry id="microp_aero_wsubi_min" type="real" category="microphys"
+       group="microp_aero_nl" valid_values="" >
+PPE-tunable minimum sub-grid vertical velocity (ice).
+Default: 0.001 m/s
 </entry>
 
 <entry id="use_hetfrz_classnuc" type="logical" category="microphys"
@@ -2838,6 +2923,18 @@ Default: .false.
 The number of negative buoyancy regions that are allowed before the convection top and CAPE calculations are completed.
 Default: =&gt; 1 for CAM6;
          =&gt; 5 for all other
+</entry>
+
+<entry id="zmconv_tiedke_add" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+PPE-tunable convective parcel temperature perturbation.
+Default: 0.5
+</entry>
+
+<entry id="zmconv_capelmt" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+PPE-tunable CAPE triggering threshold for ZM deep convection.
+Default: 70.0
 </entry>
 
 

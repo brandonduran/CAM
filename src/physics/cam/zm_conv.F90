@@ -40,7 +40,9 @@ module zm_conv
 !
    real(r8) rl         ! wg latent heat of vaporization.
    real(r8) cpres      ! specific heat at constant pressure in j/kg-degk.
-   real(r8), parameter :: capelmt = 70._r8  ! threshold value for cape for deep convection.
+!   real(r8), parameter :: capelmt = 70._r8  ! threshold value for cape for deep convection.
+   real(r8) :: capelmt ! namelist configurable:
+                       ! threshold value for cape for deep convection.
    real(r8) :: ke           ! Tunable evaporation efficiency set from namelist input zmconv_ke
    real(r8) :: ke_lnd
    real(r8) :: c0_lnd       ! set from namelist input zmconv_c0_lnd
@@ -72,17 +74,20 @@ module zm_conv
    
    integer  limcnv       ! top interface level limit for convection
 
-   real(r8),parameter ::  tiedke_add = 0.5_r8   
+   !real(r8),parameter ::  tiedke_add = 0.5_r8
+   real(r8) :: tiedke_add      ! namelist configurable
+
 
 contains
 
 
 subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_ke_lnd, &
                     zmconv_momcu, zmconv_momcd, zmconv_num_cin, zmconv_org, &
-                    zmconv_microp_in, no_deep_pbl_in)
+                    zmconv_microp_in, no_deep_pbl_in, zmconv_tiedke_add, &
+                    zmconv_capelmt)
 
    integer, intent(in)           :: limcnv_in       ! top interface level limit for convection
-   integer, intent(in)           :: zmconv_num_cin  ! Number negative buoyancy regions that are allowed 
+   integer, intent(in)           :: zmconv_num_cin  ! Number negative buoyancy regions that are allowed
                                                     ! before the convection top and CAPE calculations are completed.
    real(r8),intent(in)           :: zmconv_c0_lnd
    real(r8),intent(in)           :: zmconv_c0_ocn
@@ -92,7 +97,9 @@ subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_k
    real(r8),intent(in)           :: zmconv_momcd
    logical                       :: zmconv_org
    logical, intent(in)           :: zmconv_microp_in
-   logical, intent(in), optional :: no_deep_pbl_in  ! no_deep_pbl = .true. eliminates ZM convection entirely within PBL 
+   logical, intent(in)           :: no_deep_pbl_in  ! no_deep_pbl = .true. eliminates ZM convection entirely within PBL
+   real(r8),intent(in)           :: zmconv_tiedke_add
+   real(r8),intent(in)           :: zmconv_capelmt
 
 
    ! Initialization of ZM constants
@@ -114,23 +121,22 @@ subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_k
    zm_org  = zmconv_org
    momcu   = zmconv_momcu
    momcd   = zmconv_momcd
-
+   tiedke_add = zmconv_tiedke_add
+   capelmt = zmconv_capelmt
    zmconv_microp = zmconv_microp_in
 
-   if ( present(no_deep_pbl_in) )  then
-      no_deep_pbl = no_deep_pbl_in
-   else
-      no_deep_pbl = .false.
-   endif
+   no_deep_pbl = no_deep_pbl_in
 
    tau = 3600._r8
 
    if ( masterproc ) then
       write(iulog,*) 'tuning parameters zm_convi: tau',tau
-      write(iulog,*) 'tuning parameters zm_convi: c0_lnd',c0_lnd, ', c0_ocn', c0_ocn 
+      write(iulog,*) 'tuning parameters zm_convi: c0_lnd',c0_lnd, ', c0_ocn', c0_ocn
       write(iulog,*) 'tuning parameters zm_convi: num_cin', num_cin
       write(iulog,*) 'tuning parameters zm_convi: ke',ke
       write(iulog,*) 'tuning parameters zm_convi: no_deep_pbl',no_deep_pbl
+      write(iulog,*) 'tuning parameters zm_convi: zm_capelmt', capelmt
+      write(iulog,*) 'tuning parameters zm_convi: zm_tiedke_add', tiedke_add
    endif
 
    if (masterproc) write(iulog,*)'**** ZM: DILUTE Buoyancy Calculation ****'
