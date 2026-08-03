@@ -862,7 +862,7 @@ subroutine sb2001v2_accre_cld_water_rain(qc,nc,qr,rho,relvar,pra,npra,mgncol)
 ! Autoconversion of cloud ice to snow
 ! similar to Ferrier (1994)
 
-subroutine ice_autoconversion(t, qiic, lami, n0i, dcs, prci, nprci, mgncol)
+subroutine ice_autoconversion(t, qiic, lami, n0i, dcs, micro_mg_iautocon_fact, prci, nprci, mgncol)
 
   integer, intent(in) :: mgncol
   real(r8), dimension(mgncol), intent(in) :: t
@@ -870,6 +870,7 @@ subroutine ice_autoconversion(t, qiic, lami, n0i, dcs, prci, nprci, mgncol)
   real(r8), dimension(mgncol), intent(in) :: lami
   real(r8), dimension(mgncol), intent(in) :: n0i
   real(r8),                    intent(in) :: dcs
+  real(r8),                    intent(in) :: micro_mg_iautocon_fact ! ppe
 
   real(r8), dimension(mgncol), intent(out) :: prci
   real(r8), dimension(mgncol), intent(out) :: nprci
@@ -889,7 +890,7 @@ subroutine ice_autoconversion(t, qiic, lami, n0i, dcs, prci, nprci, mgncol)
         d_rat = lami(i)*dcs
 
         ! Rate of ice particle conversion (number).
-        nprci(i) = n0i(i)/(lami(i)*ac_time)*exp(-d_rat)
+        nprci(i) = n0i(i)/(lami(i)*ac_time)*exp(-d_rat) * micro_mg_iautocon_fact
 
         m_ip = (rhoi*pi/6._r8) / lami(i)**3
 

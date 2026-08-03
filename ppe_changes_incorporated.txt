@@ -1,0 +1,258 @@
+Changes incorporated into clean-CAM (branch: clean-CAM)
+Base: tag cam_cesm2_1_rel_60 / commit a03b84b7
+Source: selected changes ported from /glade/work/bduran/new-ppe, EXCLUDING
+        anything related to MG3/PUMAS microphysics and EXCLUDING unused
+        externals (pumas, atmos_phys, silhs, fv3, mpas). MG2 remains the
+        active microphysics scheme.
+
+Five commits, in order:
+
+
+1. 58e819c2 - Point cosp2 external at fork with extended MODIS histogram bins
+------------------------------------------------------------
+Externals_CAM.cfg's [cosp2] entry now points at
+https://github.com/brandonduran/COSPv2.0, branch ppe-histogram-bins,
+instead of upstream CFMIP/COSPv2.0 tag v2.1.4cesm.
+
+That branch is upstream COSP2 commit a976c153 (public, on COSP2's own
+master branch, already carrying CFODD/MODIS LWP-IWP joint-histogram
+support) plus one local patch on top: extended bin boundaries in
+cosp_config.F90 (tau_binBounds, pres_binBounds, reffLIQ_binBounds,
+reffICE_binBounds -- nReffLiq 6->8, nReffIce 6->9) to widen the MODIS
+joint-histogram range.
+
+
+2. 57bc5465 - Add COSP MODIS LWP/IWP joint histograms and CFODD warm-rain
+   diagnostics
+------------------------------------------------------------
+cospsimulator_intr.F90: new history output fields --
+CLMODIS_LIQ/ICE/LWPR/IWPR, REFFMODISL/REFFMODISI, CFODD_NTOTAL1-3(_CS),
+and warm-rain occurrence-frequency fields (npdfcld/npdfdrz/npdfrain and
+cold/multi-layer/CALIPSO-only variants). Also fixes mislabeled units on
+existing COSP coordinate metadata (hPa->Pa, km->m, microns->m,
+fraction->1) and works around a strict/debug-mode runtime failure in
+subsample_and_optics by passing a local work copy of the size
+distribution (sd_wk) instead of an array-element actual argument
+directly to an intent(inout) dummy.
+
+Diagnostics only -- no effect on prognostic model fields.
+
+Deliberately NOT carried over: in the source this was ported from, a
+copy-paste accident had silently commented out and corrupted the
+clisccp2 assignment, breaking the FISCCP1_COSP history field whenever
+the ISCCP simulator is on. clisccp2 is left untouched here.
+
+
+3. a2ca4c50 - Add THETA and ice-nucleation-intermediate diagnostic
+   history fields
+------------------------------------------------------------
+cloud_fraction.F90: adds THETA (potential temperature) output.
+nucleate_ice.F90 / nucleate_ice_cam.F90 / zm_microphysics.F90: plumbs
+so4_num, dst_num, and qc (the inputs nucleati() uses) out as new
+diagnostic fields O1/O2/O3, for inspecting ice-nucleation behavior.
+
+Diagnostics only -- no effect on prognostic model fields.
+
+
+4. 69bcb5ea - Fix potentially-uninitialized tendnd in dropmixnuc
+------------------------------------------------------------
+ndrop.F90: tendnd (intent(out)) was previously assigned only for
+levels top_lev:pver; levels above top_lev were left uninitialized.
+Now zeroed up front so every level has a deterministic value regardless
+of which branches execute downstream.
+
+This is the one change in this set that is a genuine behavior fix
+rather than inert-by-default plumbing -- worth a specific look in any
+control-run comparison.
+
+
+5. 354bb07f - Add PPE-tunable knobs for MG2 microphysics, aerosol
+   activation, and ZM convection
+------------------------------------------------------------
+New namelist-configurable parameters, all defaulting to the value that
+was previously hardcoded (no default-behavior change):
+
+  micro_mg_accre_enhan_fact       (accretion of cloud water by rain)
+  micro_mg_autocon_fact           (autoconversion prefactor, default 0.01)
+  micro_mg_autocon_nd_exp         (autoconversion Nd exponent, default -1.1)
+  micro_mg_autocon_lwp_exp        (autoconversion LWP exponent, default 2.47)
+  micro_mg_homog_size             (homogeneous-freezing droplet size, 25um)
+  micro_mg_vtrmi_factor           (ice/snow fallspeed factor)
+  micro_mg_effi_factor            (ice effective radius factor)
+  micro_mg_iaccr_factor           (accretion of cloud water by snow)
+  micro_mg_max_nicons             (max allowed ice number concentration)
+  microp_aero_npccn_scale/wsub_scale/wsubi_scale/wsub_min/wsubi_min
+                                  (microp_aero_bulk_scale already existed)
+  zmconv_tiedke_add               (was a hardcoded parameter, 0.5)
+  zmconv_capelmt                  (was a hardcoded parameter, 70.0)
+
+IMPORTANT: the first 9 knobs above were originally implemented only
+inside a PUMAS/MG3-based microphysics variant, which this repo does not
+carry (MG2 only, per instruction). They were hand-ported directly onto
+the real MG2 code (micro_mg2_0.F90) by locating the analogous formula
+in each case (accretion, ice fallspeed, ice effective radius, ice
+accretion of cloud droplets, homogeneous-freezing size, ice number cap)
+-- this is new code written to match the same pattern, not a mechanical
+port of an existing diff. Recommend testing before relying on it for a
+production PPE.
+
+Also found (and did NOT reproduce) a real bug in the source this was
+ported from: micro_mg_iaccr_factor and micro_mg_accre_enhan_fact were
+applied there as whole-array multiplications (e.g. "psacws = psacws *
+factor") sitting inside a per-vertical-level do-loop, which compounds
+the factor across levels on every loop iteration once it deviates from
+1.0 -- invisible at the default value of 1.0, which is presumably why
+it went unnoticed. This port applies both multiplications scoped to
+the current level ("psacws(:,k) = ...") instead.
+
+
+Not carried over (excluded per instructions)
+------------------------------------------------------------
+- Externals_CAM.cfg additions for pumas, atmos_phys, silhs, fv3
+  (unused externals -- confirmed not wired into bld/configure's
+  Filepath, dead weight in the source new-ppe was built from)
+- micro_mg2_0.F90 deletion / micro_mg3_0.F90 addition (both copies)
+- check_energy.F90's GRAUQM/graupel tracer accounting
+- rrtmg/cloud_rad_props.F90 + radiation.F90's graupel radiative optics
+- bld/configure's mg3 nadv block; definition.xml's "mg3" valid-value
+- All microphys="mg3"-conditioned namelist defaults (micro_mg_do_hail/
+  do_graupel, graupel_in_rad, micro_mg_version=3, and the mg3-specific
+  tuning for zmconv_c0_lnd/ocn, momcu/momcd, cldfrc_rhminl, etc.)
+
+
+6. MMPPE mandatory-21 parameter port (see MMPPE-info/MMPPE.md)
+------------------------------------------------------------
+Goal: implement the 21 "mandatory" parameters from the AeroCom Multi-Model
+PPE (MMPPE) protocol. Ported by hand-mapping each ECHAM/HAM-named protocol
+parameter onto the equivalent CAM6/MG2/MAM4/ZM process, using the CAM7
+reference tree (/glade/work/addisus/sandboxes/CAM_github/CAM) as a guide for
+where a similar knob was already added there.
+
+6a. Already covered by existing knobs -- no code changes made:
+  emi_du         -> dust_emis_fact              (stock CAM6)
+  wetdep_ic      -> sol_facti_cloud_borne       (stock CAM6; default 1.0
+                                                  matches protocol default)
+  activ_aero     -> microp_aero_npccn_scale     (added in commit 5, above)
+  activ_cwturb   -> microp_aero_wsub_scale /
+                     microp_aero_wsubi_scale    (added in commit 5, above)
+  micro_ccraut   -> micro_mg_autocon_fact       (added in commit 5, above)
+  conv_cprcon    -> zmconv_c0_lnd / zmconv_c0_ocn (stock CAM6)
+
+6b. New namelist knobs added this round, all defaulting to no change in
+    behavior:
+
+  Emission-rate scale factors (mo_srf_emissions.F90, chemistry.F90):
+    srf_emis_scale_so2_ant, srf_emis_scale_so2_bb   (emi_ant_so2, emi_bb_so2)
+    srf_emis_scale_bc_ant,  srf_emis_scale_bc_bb    (emi_ant_bc,  emi_bb_bc)
+    srf_emis_scale_oc_ant,  srf_emis_scale_oc_bb    (emi_ant_oc,  emi_bb_oc)
+    srf_emis_scale_dms                              (emi_dms)
+  New public srf_emis_scale_readnl() in mo_srf_emissions.F90, called from
+  chemistry.F90's chem_readnl (parallel to dust_readnl). Applied via a new
+  get_srf_emis_ppe_scale(species, filename) function at the point
+  emissions(m)%scalefactor is set, matched by species name + an
+  anthro/'_bb_' substring tag in the emission-dataset filename (CMIP6-style
+  datasets already split anthro vs. bb into separate files per species).
+  BC/OC mass-emission scaling is also applied to their independently
+  prescribed companion number-emission files (num_a4_bc/num_a4_oc/
+  num_a4_bb/num_pom_bb, species 'num_a4') so the assumed emitted particle
+  size is unaffected by a pure mass-rate perturbation -- this was a
+  deliberate design choice (confirmed with user), not an incidental default.
+  Primary sulfate (so4_a1/so4_a2/num_a1/num_a2) is NOT scaled by the SO2
+  knobs -- only the SO2 gas-phase emission is scaled, consistent with the
+  protocol treating primary-sulfate emission as a separate, much smaller
+  pathway it doesn't otherwise call out.
+
+  Sea salt accumulation/coarse split (seasalt_model.F90, aero_model.F90):
+    seasalt_emis_scale_accum, seasalt_emis_scale_coarse
+    (emi_ss_acc, emi_ss_coa)
+  Applied on top of the existing global seasalt_emis_scale. In MAM4's
+  3-bin scheme (accum, aitken, coarse), the coarse-mode scale applies only
+  to the last bin (ibin==nslt); the aitken bin is deliberately left
+  unscaled by either new factor (per user decision) -- only the
+  accumulation bin (ibin==1) responds to seasalt_emis_scale_accum.
+
+  Ice-to-snow autoconversion rate scale (micro_mg_utils.F90, micro_mg2_0.F90,
+  micro_mg_cam.F90):
+    micro_mg_iautocon_fact (micro_ccsaut)
+  ice_autoconversion()'s previously hardcoded 180s autoconversion timescale
+  is now scaled by this factor (multiplies nprci, and prci inherits the
+  scaling through nprci). Threaded through micro_mg_init exactly like the
+  existing micro_mg_autocon_fact (liquid autoconversion) knob.
+  IMPORTANT: ice_autoconversion() is also called from zm_microphysics.F90
+  (ZM's own optional convective-cloud microphysics, zmconv_microp) -- that
+  call site now passes a literal 1.0_r8 (unscaled) rather than the new
+  namelist knob, since micro_ccsaut is scoped to MG2 stratiform
+  microphysics only, not ZM's convective microphysics.
+
+  ZM entrainment rate (zm_conv.F90, zm_conv_intr.F90):
+    zmconv_dmpdz (conv_entrpen), default -1.0e-3 m-1
+  Replaces the previously hardcoded ocean/general entrainment rate
+  (dmpdz) in parcel_dilute(); the land-specific dmpdz_lnd stays hardcoded
+  at -1.e-3, matching how CAM7's own zmconv_dmpdz knob is implemented
+  (CAM7 also leaves its land entrainment hardcoded).
+
+6c. Deliberately deferred (not implemented this round, per user decision):
+  rad_bc_ni, rad_oc_ni   -- BC/OC imaginary refractive index. No knob
+    exists in CAM6 or CAM7; refractive index is baked into physprop
+    netCDF lookup tables. BC's is spectrally flat (checked actual data:
+    -0.79 across all 14 SW bands) but OC's varies 15x band-to-band
+    (-0.005 to -0.079), so a literal absolute-override knob would behave
+    very differently for the two species. Runtime hook would be in
+    modal_aer_opt.F90 (modal_aero_sw/lw, where per-species refractive
+    index is volume-mixed into the mode's bulk value) if revisited.
+  emi_cmr_ff, emi_cmr_bb -- emitted particle size (count median radius)
+    for fossil-fuel/biomass-burning emissions. No knob in CAM6 or CAM7;
+    the assumed size is baked into separate, independently-prescribed
+    number-emission datasets. A proxy (scaling the num_a4_bc/num_a4_oc/
+    etc. number flux independently of mass, via the same mo_srf_emissions
+    mechanism as 6b) was proposed but deferred, not implemented.
+
+6d. Bug fix (pre-existing, found while testing 6b/6e): namelist_defaults_cam.xml
+  was missing a default entry for microp_aero_bulk_scale (2.D0). build-namelist
+  still calls add_default($nl, 'microp_aero_bulk_scale') (bld/build-namelist:2948),
+  so ANY build-namelist invocation on this branch was failing with "No default
+  value found for microp_aero_bulk_scale" -- unrelated to the mandatory-21 work,
+  apparently dropped by accident during the commit-5 cherry-pick/rebase (git
+  history shows a "-<microp_aero_bulk_scale>2.D0</microp_aero_bulk_scale>" diff
+  hunk). Restored the entry (same default value, 2.D0) in namelist_defaults_cam.xml.
+
+6e. Namelist-registration test added: test/unit/namelist_ppe/
+  test_mandatory_ppe_namelist.sh. Does not compile or run CAM; drives
+  bld/configure (-ccsm_seq, to skip the MCT library build) and
+  bld/build-namelist directly against a scratch dir (symlinked bld/src,
+  dummy cime/ marker dir) to confirm each of the 17 implemented mandatory
+  parameters' namelist variable(s) are accepted and round-trip to the
+  requested value in the generated atm_in, that the 4 deferred parameters
+  are correctly NOT registered, and a negative control (an invented,
+  never-registered variable name) is correctly rejected -- proving the
+  harness would catch a real registration failure. Requires an inputdata
+  root reachable via -csmdata (defaults to
+  /glade/campaign/cesm/cesmdata/cseg/inputdata) but does not read any
+  actual input files, just the build-namelist/config machinery. Result as
+  of this writing: 17/17 implemented params PASS, 4/4 deferred params
+  correctly absent, negative control PASS.
+
+6f. Known pre-existing issue found (not caused by this round's changes):
+  test/unit/micro_mg_utils/test_mg_processes.pf calls kk2000_liq_
+  autoconversion() and ice_autoconversion() with argument lists that
+  are already missing several parameters added by earlier PPE work
+  (micro_mg_autocon_fact/nd_exp/lwp_exp, mgncol) -- i.e. this test file
+  was already out of sync with micro_mg_utils.F90 before this session's
+  changes (last touched at the CAM6 initial-release commit). Adding
+  micro_mg_iautocon_fact to ice_autoconversion()'s signature does not
+  newly break this test; it was not compiling against the current
+  interface already. Left as-is (out of scope for this pass) but worth
+  fixing before relying on that unit test suite.
+
+
+Not yet done
+------------------------------------------------------------
+- ppe-histogram-bins branch and clean-CAM branch both need pushing to
+  GitHub (brandonduran/COSPv2.0 and brandonduran/CAM respectively) --
+  requires your own credentials, run manually.
+- No compile/run test has been done in this environment -- recommend a
+  short control run (MG2, no knobs perturbed) compared against the
+  original new-ppe/clean-CAM baseline before using this branch for a
+  production PPE.
+- rad_bc_ni, rad_oc_ni, emi_cmr_ff, emi_cmr_bb (4 of the 21 MMPPE
+  mandatory parameters) remain unimplemented -- see 6c above.

@@ -26,17 +26,21 @@ module seasalt_model
   logical :: seasalt_active = .false.
 
   real(r8):: emis_scale
+  real(r8):: emis_scale_accum   ! ppe: additional scale for accum-mode (and any non-coarse) bins
+  real(r8):: emis_scale_coarse  ! ppe: additional scale for the coarse-mode bin
 
 contains
-  
+
   !=============================================================================
   !=============================================================================
-  subroutine seasalt_init(seasalt_emis_scale)
+  subroutine seasalt_init(seasalt_emis_scale, seasalt_emis_scale_accum, seasalt_emis_scale_coarse)
     use sslt_sections, only: sslt_sections_init
     use constituents,  only: cnst_get_ind
     use rad_constituents, only: rad_cnst_get_info
 
     real(r8), intent(in) :: seasalt_emis_scale
+    real(r8), intent(in) :: seasalt_emis_scale_accum
+    real(r8), intent(in) :: seasalt_emis_scale_coarse
     integer :: m, l, nspec, ndx
     character(len=32) :: spec_name
     
@@ -66,6 +70,8 @@ contains
     call sslt_sections_init()
 
     emis_scale = seasalt_emis_scale
+    emis_scale_accum = seasalt_emis_scale_accum
+    emis_scale_coarse = seasalt_emis_scale_coarse
 
   end subroutine seasalt_init
 
@@ -86,6 +92,7 @@ contains
     ! local vars
     integer  :: mn, mm, ibin, isec, i
     real(r8) :: fi(ncol,nsections)
+    real(r8) :: bin_scale
 
     real(r8) :: sst_sz_range_lo (nslt)
     real(r8) :: sst_sz_range_hi (nslt)
@@ -103,11 +110,19 @@ contains
     do ibin = 1,nslt
        mm = seasalt_indices(ibin)
        mn = seasalt_indices(nslt+ibin)
-       
+
+       ! ppe: last bin is always the coarse mode; all other bins (accum,
+       ! and aitken if present) get the accum-mode scale factor.
+       if (ibin == nslt) then
+          bin_scale = emis_scale * emis_scale_coarse
+       else
+          bin_scale = emis_scale * emis_scale_accum
+       endif
+
        if (mn>0) then
           do i=1, nsections
              if (Dg(i).ge.sst_sz_range_lo(ibin) .and. Dg(i).lt.sst_sz_range_hi(ibin)) then
-                cflx(:ncol,mn)=cflx(:ncol,mn)+fi(:ncol,i)*ocnfrc(:ncol)*emis_scale  !++ ag: scale sea-salt
+                cflx(:ncol,mn)=cflx(:ncol,mn)+fi(:ncol,i)*ocnfrc(:ncol)*bin_scale  !++ ag: scale sea-salt
              endif
           enddo
        endif
@@ -115,7 +130,7 @@ contains
        cflx(:ncol,mm)=0.0_r8
        do i=1, nsections
           if (Dg(i).ge.sst_sz_range_lo(ibin) .and. Dg(i).lt.sst_sz_range_hi(ibin)) then
-             cflx(:ncol,mm)=cflx(:ncol,mm)+fi(:ncol,i)*ocnfrc(:ncol)*emis_scale  &   !++ ag: scale sea-salt
+             cflx(:ncol,mm)=cflx(:ncol,mm)+fi(:ncol,i)*ocnfrc(:ncol)*bin_scale  &   !++ ag: scale sea-salt
                   *4._r8/3._r8*pi*rdry(i)**3*dns_aer_sst  ! should use dry size, convert from number to mass flux (kg/m2/s)
           endif
        enddo

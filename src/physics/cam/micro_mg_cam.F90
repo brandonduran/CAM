@@ -131,6 +131,7 @@ real(r8) :: micro_mg_vtrmi_factor     = unset_r8        ! ice fall speed factor
 real(r8) :: micro_mg_effi_factor      = unset_r8        ! ice effective radius factor
 real(r8) :: micro_mg_iaccr_factor     = unset_r8        ! ice accretion of cloud droplet
 real(r8) :: micro_mg_max_nicons       = unset_r8  ! max allowed ice number concentration
+real(r8) :: micro_mg_iautocon_fact    = unset_r8  ! ice->snow autoconversion prefactor
 !ppe
 
 logical, public :: do_cldliq ! Prognose cldliq flag
@@ -291,7 +292,7 @@ subroutine micro_mg_cam_readnl(nlfile)
        micro_mg_nccons, micro_mg_nicons, micro_mg_ncnst, micro_mg_ninst, micro_mg_accre_enhan_fact, & !ppe
        micro_mg_autocon_fact, micro_mg_autocon_nd_exp, micro_mg_autocon_lwp_exp, & !ppe
        micro_mg_homog_size, micro_mg_vtrmi_factor, micro_mg_effi_factor, micro_mg_iaccr_factor, & !ppe
-       micro_mg_max_nicons !ppe
+       micro_mg_max_nicons, micro_mg_iautocon_fact !ppe
   !-----------------------------------------------------------------------------
 
   if (masterproc) then
@@ -410,6 +411,9 @@ subroutine micro_mg_cam_readnl(nlfile)
   call mpi_bcast(micro_mg_max_nicons, 1, mpi_real8, mstrid, mpicom, ierr)
   if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_max_nicons")
 
+  call mpi_bcast(micro_mg_iautocon_fact, 1, mpi_real8, mstrid, mpicom, ierr)
+  if (ierr /= 0) call endrun(sub//": FATAL: mpi_bcast: micro_mg_iautocon_fact")
+
   if(micro_mg_accre_enhan_fact == unset_r8) call endrun(sub//": FATAL: micro_mg_accre_enhan_fact is not set")
   if(micro_mg_autocon_fact == unset_r8) call endrun(sub//": FATAL: micro_mg_autocon_fact is not set")
   if(micro_mg_autocon_nd_exp == unset_r8) call endrun(sub//": FATAL: micro_mg_autocon_nd_exp is not set")
@@ -419,6 +423,7 @@ subroutine micro_mg_cam_readnl(nlfile)
   if(micro_mg_effi_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_effi_factor is not set")
   if(micro_mg_iaccr_factor == unset_r8) call endrun(sub//": FATAL: micro_mg_iaccr_factor is not set")
   if(micro_mg_max_nicons == unset_r8) call endrun(sub//": FATAL: micro_mg_max_nicons is not set")
+  if(micro_mg_iautocon_fact == unset_r8) call endrun(sub//": FATAL: micro_mg_iautocon_fact is not set")
 !ppe
 
   if (masterproc) then
@@ -448,6 +453,7 @@ subroutine micro_mg_cam_readnl(nlfile)
      write(iulog,*) '  micro_mg_effi_factor        = ', micro_mg_effi_factor
      write(iulog,*) '  micro_mg_iaccr_factor       = ', micro_mg_iaccr_factor
      write(iulog,*) '  micro_mg_max_nicons         = ', micro_mg_max_nicons
+     write(iulog,*) '  micro_mg_iautocon_fact      = ', micro_mg_iautocon_fact
   end if
 
 contains
@@ -782,7 +788,7 @@ subroutine micro_mg_cam_init(pbuf2d)
               micro_mg_accre_enhan_fact, &
               micro_mg_autocon_fact, micro_mg_autocon_nd_exp, micro_mg_autocon_lwp_exp, micro_mg_homog_size, &
               micro_mg_vtrmi_factor, micro_mg_effi_factor, micro_mg_iaccr_factor, &
-              micro_mg_max_nicons, errstring)
+              micro_mg_max_nicons, micro_mg_iautocon_fact, errstring)
       end select
    end select
 

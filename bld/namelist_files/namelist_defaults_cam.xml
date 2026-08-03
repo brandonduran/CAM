@@ -1268,6 +1268,9 @@
 <micro_mg_iaccr_factor                  >  1.D0    </micro_mg_iaccr_factor>
 
 <micro_mg_max_nicons                  >  1.D8    </micro_mg_max_nicons>
+<micro_mg_iautocon_fact               >  1.D0    </micro_mg_iautocon_fact>
+
+<microp_aero_bulk_scale                  >  2.D0    </microp_aero_bulk_scale>
 
 <microp_aero_npccn_scale                  >  1.D0    </microp_aero_npccn_scale>
 
@@ -1359,6 +1362,15 @@
 <do_molec_press> 0.1D0 </do_molec_press>
 <molec_diff_bot_press> 50.D0 </molec_diff_bot_press>
 
+<!-- ppe: emission-rate scale factors (anthro/bb SO2, BC, OC, DMS) -->
+<srf_emis_scale_so2_ant  >1.D0</srf_emis_scale_so2_ant>
+<srf_emis_scale_so2_bb   >1.D0</srf_emis_scale_so2_bb>
+<srf_emis_scale_bc_ant   >1.D0</srf_emis_scale_bc_ant>
+<srf_emis_scale_bc_bb    >1.D0</srf_emis_scale_bc_bb>
+<srf_emis_scale_oc_ant   >1.D0</srf_emis_scale_oc_ant>
+<srf_emis_scale_oc_bb    >1.D0</srf_emis_scale_oc_bb>
+<srf_emis_scale_dms      >1.D0</srf_emis_scale_dms>
+
 <!-- dust emission tuning factor -->
 <dust_emis_fact                                                         >0.37D0</dust_emis_fact>
 <dust_emis_fact                            phys="cam5"                  >0.35D0</dust_emis_fact>
@@ -1384,6 +1396,8 @@
 
 <!-- seasalt emission tuning factor -->
 <!-- Note that ver="strat" when modal_accum_coarse_exch=.true. -->
+<seasalt_emis_scale_accum                     >1.D0</seasalt_emis_scale_accum>
+<seasalt_emis_scale_coarse                    >1.D0</seasalt_emis_scale_coarse>
 <seasalt_emis_scale                          >1.35D0</seasalt_emis_scale>
 <seasalt_emis_scale ver="mam7"               >1.62D0</seasalt_emis_scale>
 <seasalt_emis_scale ver="strat"              >0.90D0</seasalt_emis_scale>
@@ -1674,6 +1688,7 @@
 <zmconv_num_cin                                       phys="cam6"     > 1       </zmconv_num_cin>
 <zmconv_tiedke_add                                                    > 0.5     </zmconv_tiedke_add>
 <zmconv_capelmt                                                       > 70.0    </zmconv_capelmt>
+<zmconv_dmpdz                                                         > -1.0e-3 </zmconv_dmpdz>
 
 <!-- Cloud sedimentation -->
 

@@ -76,6 +76,7 @@ module zm_conv
 
    !real(r8),parameter ::  tiedke_add = 0.5_r8
    real(r8) :: tiedke_add      ! namelist configurable
+   real(r8) :: dmpdz_param     ! namelist configurable: parcel entrainment rate (/m), set from zmconv_dmpdz
 
 
 contains
@@ -84,7 +85,7 @@ contains
 subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_ke_lnd, &
                     zmconv_momcu, zmconv_momcd, zmconv_num_cin, zmconv_org, &
                     zmconv_microp_in, no_deep_pbl_in, zmconv_tiedke_add, &
-                    zmconv_capelmt)
+                    zmconv_capelmt, zmconv_dmpdz)
 
    integer, intent(in)           :: limcnv_in       ! top interface level limit for convection
    integer, intent(in)           :: zmconv_num_cin  ! Number negative buoyancy regions that are allowed
@@ -100,6 +101,7 @@ subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_k
    logical, intent(in)           :: no_deep_pbl_in  ! no_deep_pbl = .true. eliminates ZM convection entirely within PBL
    real(r8),intent(in)           :: zmconv_tiedke_add
    real(r8),intent(in)           :: zmconv_capelmt
+   real(r8),intent(in)           :: zmconv_dmpdz
 
 
    ! Initialization of ZM constants
@@ -123,6 +125,7 @@ subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_k
    momcd   = zmconv_momcd
    tiedke_add = zmconv_tiedke_add
    capelmt = zmconv_capelmt
+   dmpdz_param = zmconv_dmpdz
    zmconv_microp = zmconv_microp_in
 
    no_deep_pbl = no_deep_pbl_in
@@ -137,6 +140,7 @@ subroutine zm_convi(limcnv_in, zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, zmconv_k
       write(iulog,*) 'tuning parameters zm_convi: no_deep_pbl',no_deep_pbl
       write(iulog,*) 'tuning parameters zm_convi: zm_capelmt', capelmt
       write(iulog,*) 'tuning parameters zm_convi: zm_tiedke_add', tiedke_add
+      write(iulog,*) 'tuning parameters zm_convi: zm_dmpdz', dmpdz_param
    endif
 
    if (masterproc) write(iulog,*)'**** ZM: DILUTE Buoyancy Calculation ****'
@@ -4331,7 +4335,7 @@ if (zm_org) then
    org2Tpert = 0._r8
 endif
 nit_lheat = 2 ! iterations for ds,dq changes from condensation freezing.
-dmpdz=-1.e-3_r8       ! Entrainment rate. (-ve for /m)
+dmpdz=dmpdz_param    ! Entrainment rate. (-ve for /m) -- ppe: zmconv_dmpdz
 dmpdz_lnd=-1.e-3_r8
 !dmpdpc = 3.e-2_r8   ! In cloud entrainment rate (/mb).
 lwmax = 1.e-3_r8    ! Need to put formula in for this.

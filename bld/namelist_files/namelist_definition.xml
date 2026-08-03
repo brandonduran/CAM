@@ -2627,6 +2627,12 @@ PPE-tunable max allowed ice number concentration.
 Default: 1.D8 m-3
 </entry>
 
+<entry id="micro_mg_iautocon_fact" type="real" category="microphys"
+       group="micro_mg_nl" valid_values="" >
+PPE-tunable scale factor for the cloud ice to snow autoconversion rate.
+Default: 1.0
+</entry>
+
 <!-- Aerosol microphysics -->
 <entry id="microp_aero_bulk_scale" type="real" category="microphys"
        group="microp_aero_nl" valid_values="" >
@@ -2935,6 +2941,13 @@ Default: 0.5
        group="zmconv_nl" valid_values="" >
 PPE-tunable CAPE triggering threshold for ZM deep convection.
 Default: 70.0
+</entry>
+
+<entry id="zmconv_dmpdz" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+PPE-tunable parcel fractional mass entrainment rate for ZM deep convection,
+in units of (m-1).
+Default: -1.0e-3 m-1
 </entry>
 
 
@@ -4933,6 +4946,20 @@ Tuning for seasalt_emis
 Default: set by build-namelist.
 </entry>
 
+<entry id="seasalt_emis_scale_accum" type="real" category="cam_chem"
+       group="aerosol_nl" valid_values="" >
+PPE-tunable scale factor for accumulation-mode (and aitken/fine, if present)
+sea salt emissions, applied on top of seasalt_emis_scale.
+Default: 1.0
+</entry>
+
+<entry id="seasalt_emis_scale_coarse" type="real" category="cam_chem"
+       group="aerosol_nl" valid_values="" >
+PPE-tunable scale factor for coarse-mode sea salt emissions, applied on top
+of seasalt_emis_scale.
+Default: 1.0
+</entry>
+
 <entry id="aer_sol_facti" type="real(1000)" category="cam_chem"
        group="aerosol_nl" valid_values="" >
 In-cloud solubility factor used in BULK aerosol wet removal
@@ -5061,6 +5088,55 @@ Default: set by build-namelist.
        group="dust_nl" valid_values="" >
 Tuning parameter for dust emissions.
 Default: set by build-namelist.
+</entry>
+
+<entry id="srf_emis_scale_so2_ant" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for anthropogenic SO2 surface emissions.
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_so2_bb" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for biomass-burning SO2 surface emissions.
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_bc_ant" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for anthropogenic BC surface emissions (mass and
+the companion number-emission file, so emitted particle size is unaffected).
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_bc_bb" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for biomass-burning BC surface emissions (mass and
+the companion number-emission file, so emitted particle size is unaffected).
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_oc_ant" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for anthropogenic OC (primary organic matter) surface
+emissions (mass and the companion number-emission file, so emitted particle
+size is unaffected).
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_oc_bb" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for biomass-burning OC (primary organic matter)
+surface emissions (mass and the companion number-emission file, so emitted
+particle size is unaffected).
+Default: 1.0
+</entry>
+
+<entry id="srf_emis_scale_dms" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable scale factor for DMS surface emissions (applied to both the
+open-ocean/other and biomass-burning DMS emission files).
+Default: 1.0
 </entry>
 
 <entry id="steady_state_ion_elec_temp" type="logical" category="waccmx"

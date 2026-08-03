@@ -1232,7 +1232,10 @@ subroutine zm_mphy(su,    qu,   mu,   du,   eu,    cmel,  cmei,  zf,   pm,   te,
               ! Autoconversion of cloud ice to snow
               ! similar to Ferrier (1994)
 
-              call ice_autoconversion(t(i,k), qiic(i,k), lami(k), n0i(k), dcs, prci(k), nprci(k), 1)  
+              ! note: ZM convective-cloud ice autoconversion is intentionally left
+              ! unscaled (1.0) here -- the ppe-tunable micro_mg_iautocon_fact knob
+              ! only applies to MG2 stratiform microphysics (see micro_mg2_0.F90).
+              call ice_autoconversion(t(i,k), qiic(i,k), lami(k), n0i(k), dcs, 1._r8, prci(k), nprci(k), 1)
 
               ! provisional snow mixing ratio and number concentration (qniic and nsic) 
               ! at boundary are estimated via autoconversion

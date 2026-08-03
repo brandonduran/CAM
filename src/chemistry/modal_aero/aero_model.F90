@@ -93,7 +93,9 @@ module aero_model
   real(r8)          :: sol_facti_cloud_borne   = 1._r8
   real(r8)          :: sol_factb_interstitial  = 0.1_r8
   real(r8)          :: sol_factic_interstitial = 0.4_r8
-  real(r8)          :: seasalt_emis_scale 
+  real(r8)          :: seasalt_emis_scale
+  real(r8)          :: seasalt_emis_scale_accum  = 1._r8   ! ppe: additional scale for accum-mode sea salt
+  real(r8)          :: seasalt_emis_scale_coarse = 1._r8   ! ppe: additional scale for coarse-mode sea salt
 
   integer :: ndrydep = 0
   integer,allocatable :: drydep_indices(:)
@@ -128,7 +130,8 @@ contains
     character(len=16) :: aer_drydep_list(pcnst) = ' '
 
     namelist /aerosol_nl/ aer_wetdep_list, aer_drydep_list, sol_facti_cloud_borne, &
-       sol_factb_interstitial, sol_factic_interstitial, modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale
+       sol_factb_interstitial, sol_factic_interstitial, modal_strat_sulfate, modal_accum_coarse_exch, seasalt_emis_scale, &
+       seasalt_emis_scale_accum, seasalt_emis_scale_coarse
 
     !-----------------------------------------------------------------------------
 
@@ -156,6 +159,8 @@ contains
     call mpibcast(sol_factic_interstitial, 1,                       mpir8,   0, mpicom)
     call mpibcast(modal_strat_sulfate,     1,                       mpilog,  0, mpicom)
     call mpibcast(seasalt_emis_scale, 1,                            mpir8,   0, mpicom)
+    call mpibcast(seasalt_emis_scale_accum, 1,                      mpir8,   0, mpicom)
+    call mpibcast(seasalt_emis_scale_coarse, 1,                     mpir8,   0, mpicom)
     call mpibcast(modal_accum_coarse_exch, 1,                       mpilog,  0, mpicom)
 #endif
 
@@ -260,7 +265,7 @@ contains
     endif
 
     call dust_init()
-    call seasalt_init(seasalt_emis_scale)
+    call seasalt_init(seasalt_emis_scale, seasalt_emis_scale_accum, seasalt_emis_scale_coarse)
     call wetdep_init()
 
     nwetdep = 0

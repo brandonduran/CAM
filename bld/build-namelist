@@ -2361,6 +2361,15 @@ if ($chem =~ /_mam4/ and $phys =~ /cam6/) {
         add_default($nl, 'srf_emis_cycle_yr',  'val'=>2000);
     }
 
+    # ppe
+    add_default($nl, 'srf_emis_scale_so2_ant');
+    add_default($nl, 'srf_emis_scale_so2_bb');
+    add_default($nl, 'srf_emis_scale_bc_ant');
+    add_default($nl, 'srf_emis_scale_bc_bb');
+    add_default($nl, 'srf_emis_scale_oc_ant');
+    add_default($nl, 'srf_emis_scale_oc_bb');
+    add_default($nl, 'srf_emis_scale_dms');
+
     # Vertical emission datasets:
     %species = ('so2_cv_ext_file'    => 'SO2',
                 'so4_a1_an_ext_file' => 'so4_a1',
@@ -2928,6 +2937,7 @@ if ($cfg->get('microphys') =~ /^mg/) {
     add_default($nl, 'micro_mg_effi_factor');
     add_default($nl, 'micro_mg_iaccr_factor');
     add_default($nl, 'micro_mg_max_nicons');
+    add_default($nl, 'micro_mg_iautocon_fact');
 
     # For CESM2, the decision was made to set micro_do_sb_physics to false
     add_default($nl, 'micro_do_sb_physics', 'val'=>'.false.');
@@ -3127,6 +3137,7 @@ if (!$simple_phys) {
     add_default($nl, 'zmconv_num_cin');
     add_default($nl, 'zmconv_tiedke_add');
     add_default($nl, 'zmconv_capelmt');
+    add_default($nl, 'zmconv_dmpdz');
 }
 
 # moist convection rainwater coefficients
@@ -3212,6 +3223,10 @@ if ($chem =~ /_mam(\d)/) {
     else {
         add_default($nl, 'seasalt_emis_scale');
     }
+
+    # ppe
+    add_default($nl, 'seasalt_emis_scale_accum');
+    add_default($nl, 'seasalt_emis_scale_coarse');
 }
 
 # Gravity wave drag settings

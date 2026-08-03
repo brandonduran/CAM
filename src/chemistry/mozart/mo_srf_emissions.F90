@@ -30,17 +30,121 @@ module mo_srf_emissions
 
   private
 
-  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time 
+  public  :: srf_emissions_inti, set_srf_emissions, set_srf_emissions_time
+  public  :: srf_emis_scale_readnl
 
   save
 
   real(r8), parameter :: amufac = 1.65979e-23_r8         ! 1.e4* kg / amu
   logical :: has_emis(gas_pcnst)
   type(emission), allocatable :: emissions(:)
-  integer                     :: n_emis_files 
+  integer                     :: n_emis_files
   integer :: c10h16_ndx, isop_ndx
 
+  ! ppe: emission-rate scale factors, applied by species + anthro/bb file tag
+  ! in srf_emissions_inti. All default to 1 (no change to default emissions).
+  real(r8) :: srf_emis_scale_so2_ant = 1._r8
+  real(r8) :: srf_emis_scale_so2_bb  = 1._r8
+  real(r8) :: srf_emis_scale_bc_ant  = 1._r8
+  real(r8) :: srf_emis_scale_bc_bb   = 1._r8
+  real(r8) :: srf_emis_scale_oc_ant  = 1._r8
+  real(r8) :: srf_emis_scale_oc_bb   = 1._r8
+  real(r8) :: srf_emis_scale_dms     = 1._r8
+
 contains
+
+  !=============================================================================
+  ! reads the ppe emission-scale namelist options
+  !=============================================================================
+  subroutine srf_emis_scale_readnl(nlfile)
+
+    use namelist_utils,  only: find_group_name
+    use units,            only: getunit, freeunit
+    use mpishorthand
+
+    character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
+
+    integer :: unitn, ierr
+    character(len=*), parameter :: subname = 'srf_emis_scale_readnl'
+
+    namelist /srf_emis_scale_nl/ srf_emis_scale_so2_ant, srf_emis_scale_so2_bb, &
+         srf_emis_scale_bc_ant, srf_emis_scale_bc_bb, &
+         srf_emis_scale_oc_ant, srf_emis_scale_oc_bb, &
+         srf_emis_scale_dms
+
+    if (masterproc) then
+       unitn = getunit()
+       open( unitn, file=trim(nlfile), status='old' )
+       call find_group_name(unitn, 'srf_emis_scale_nl', status=ierr)
+       if (ierr == 0) then
+          read(unitn, srf_emis_scale_nl, iostat=ierr)
+          if (ierr /= 0) then
+             call endrun(subname // ':: ERROR reading namelist')
+          end if
+       end if
+       close(unitn)
+       call freeunit(unitn)
+    end if
+
+#ifdef SPMD
+    call mpibcast(srf_emis_scale_so2_ant, 1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_so2_bb,  1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_bc_ant,  1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_bc_bb,   1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_oc_ant,  1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_oc_bb,   1, mpir8, 0, mpicom)
+    call mpibcast(srf_emis_scale_dms,     1, mpir8, 0, mpicom)
+#endif
+
+  end subroutine srf_emis_scale_readnl
+
+  !=============================================================================
+  ! ppe: emission-rate scale factor for a given emission-file entry, matched by
+  ! species and by an anthro ('anthro') / biomass-burning ('_bb_') tag in the
+  ! filename (CMIP6-style emission datasets keep anthro and bb sources in
+  ! separate files per species). BC and OC's independently-prescribed number-
+  ! emission files (species 'num_a4') are scaled by the same factor as their
+  ! parent mass species so the assumed emitted particle size is unaffected.
+  !=============================================================================
+  function get_srf_emis_ppe_scale(species, filename) result(scale)
+
+    character(len=*), intent(in) :: species
+    character(len=*), intent(in) :: filename
+    real(r8) :: scale
+
+    logical :: is_anthro, is_bb
+
+    scale = 1._r8
+    is_anthro = index(filename, 'anthro') > 0
+    is_bb     = index(filename, '_bb_')   > 0
+
+    select case (trim(species))
+    case ('SO2')
+       if (is_anthro) scale = srf_emis_scale_so2_ant
+       if (is_bb)     scale = srf_emis_scale_so2_bb
+    case ('DMS')
+       scale = srf_emis_scale_dms
+    case ('bc_a4')
+       if (is_anthro) scale = srf_emis_scale_bc_ant
+       if (is_bb)     scale = srf_emis_scale_bc_bb
+    case ('pom_a4')
+       if (is_anthro) scale = srf_emis_scale_oc_ant
+       if (is_bb)     scale = srf_emis_scale_oc_bb
+    case ('pomff1_a4')
+       scale = srf_emis_scale_oc_ant
+    case ('pombb1_a4')
+       scale = srf_emis_scale_oc_bb
+    case ('num_a4')
+       if (index(filename, 'bc_a4') > 0) then
+          if (is_anthro) scale = srf_emis_scale_bc_ant
+          if (is_bb)     scale = srf_emis_scale_bc_bb
+       else if (index(filename, 'pom_a4') > 0) then
+          if (is_anthro) scale = srf_emis_scale_oc_ant
+          if (is_bb)     scale = srf_emis_scale_oc_bb
+       end if
+    end select
+
+  end function get_srf_emis_ppe_scale
 
   subroutine srf_emissions_inti( srf_emis_specifier, emis_type_in, emis_cycle_yr, emis_fixed_ymd, emis_fixed_tod )
 
@@ -177,7 +281,8 @@ contains
        emissions(m)%species          = emis_species(indx(m))
        emissions(m)%mw               = adv_mass(emis_indexes(indx(m)))                     ! g / mole
        emissions(m)%filename         = emis_filenam(indx(m))
-       emissions(m)%scalefactor      = emis_scalefactor(indx(m))
+       emissions(m)%scalefactor      = emis_scalefactor(indx(m)) * &
+            get_srf_emis_ppe_scale(emis_species(indx(m)), emis_filenam(indx(m)))
     enddo
 
     !-----------------------------------------------------------------------

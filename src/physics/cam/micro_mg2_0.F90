@@ -238,6 +238,7 @@ real(r8) :: micro_mg_vtrmi_factor       ! ice/snow fall speed factor
 real(r8) :: micro_mg_effi_factor        ! ice effective radius factor
 real(r8) :: micro_mg_iaccr_factor       ! ice accretion of cloud droplet factor
 real(r8) :: micro_mg_max_nicons         ! max allowed ice number concentration
+real(r8) :: micro_mg_iautocon_fact      ! ice->snow autoconversion prefactor
 !ppe
 
 !===============================================================================
@@ -254,7 +255,7 @@ subroutine micro_mg_init( &
      nccons_in, nicons_in, ncnst_in, ninst_in, micro_mg_accre_enhan_fact_in, & !ppe
      micro_mg_autocon_fact_in, micro_mg_autocon_nd_exp_in, micro_mg_autocon_lwp_exp_in, & !ppe
      micro_mg_homog_size_in, micro_mg_vtrmi_factor_in, micro_mg_effi_factor_in, & !ppe
-     micro_mg_iaccr_factor_in, micro_mg_max_nicons_in, errstring) !ppe
+     micro_mg_iaccr_factor_in, micro_mg_max_nicons_in, micro_mg_iautocon_fact_in, errstring) !ppe
 
   use micro_mg_utils, only: micro_mg_utils_init
 
@@ -305,6 +306,7 @@ subroutine micro_mg_init( &
   real(r8), intent(in)  :: micro_mg_effi_factor_in
   real(r8), intent(in)  :: micro_mg_iaccr_factor_in
   real(r8), intent(in)  :: micro_mg_max_nicons_in
+  real(r8), intent(in)  :: micro_mg_iautocon_fact_in
   !ppe
 
   character(128), intent(out) :: errstring    ! Output status (non-blank for error return)
@@ -347,6 +349,7 @@ subroutine micro_mg_init( &
   micro_mg_effi_factor      = micro_mg_effi_factor_in
   micro_mg_iaccr_factor     = micro_mg_iaccr_factor_in
   micro_mg_max_nicons       = micro_mg_max_nicons_in
+  micro_mg_iautocon_fact    = micro_mg_iautocon_fact_in
   !ppe
 
   ! latent heats
@@ -1386,7 +1389,7 @@ subroutine micro_mg_tend ( &
 
      if (do_cldice) then
         call ice_autoconversion(t(:,k), qiic(:,k), lami(:,k), n0i(:,k), &
-             dcs, prci(:,k), nprci(:,k), mgncol)
+             dcs, micro_mg_iautocon_fact, prci(:,k), nprci(:,k), mgncol)
      else
         ! Add in the particles that we have already converted to snow, and
         ! don't do any further autoconversion of ice.
