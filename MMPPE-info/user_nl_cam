@@ -1,0 +1,141 @@
+!===============================================================================
+! user_nl_cam -- MMPPE control run (CTL) history output
+!===============================================================================
+! Purpose: 3-month spin-up (from the default CTL state) that the One-At-a-Time
+! (OAT) parameter_L/parameter_H runs will be initialized from, per
+! MMPPE-info/MMPPE.md ("One-At-a-Time Test": "first perform a 3-month spin-up
+! of the default CTL run, then initialize all OAT runs from this same CTL
+! state") and MMPPE-info/OAT-READ.md.
+!
+! Scope: ONLY the CESM/CAM equivalents identified so far for the 14 OAT
+! "Variables to test" (MMPPE.md, One-At-a-Time Test section) -- see
+! MMPPE-info/OAT_variable_mapping.txt for the full derivation/caveats behind
+! every field listed below. empty_htapes=.true. below turns off ALL default
+! CAM history output (the usual AMWG-default field set), so history file h0
+! contains ONLY the fields explicitly listed in fincl1.
+!
+! Frequency: daily average. Not specified by MMPPE.md for the CTL spin-up
+! itself (only the later 5-day OAT runs have an explicit "5-day global-mean"
+! requirement); daily is a reasonable default for a 3-month spin-up and keeps
+! file sizes/count manageable. Revisit if a different cadence turns out to be
+! needed once the OAT run's own output requirements are finalized.
+!
+! NOT final: this covers only the OAT "Variables to test" list. The fuller
+! "Model Output Variables" tables in MMPPE.md (6-hourly instantaneous +
+! monthly mean) are mapped in MMPPE-info/6hourly_variable_mapping.txt and
+! monthly_mean_variable_mapping.txt but not yet incorporated here -- more
+! fincl/nhtfrq/mfilt entries (likely additional history file streams, e.g.
+! fincl2/nhtfrq(2) for a 6-hourly tape) will be added as that output gets
+! finalized. Some PPE-tunable parameters are also still unimplemented (see
+! ppe_changes_incorporated.txt, "Not yet done") -- this file only controls
+! CTL *output*, not which knobs get perturbed in the later OAT runs.
+!===============================================================================
+
+! greenhouse gases (2025 values)
+! /glade/u/home/bduran/multimodel-erfaci/establish-2025-ghg-values.ipynb
+! From /glade/work/bduran/clean-CAM/forcing_datasets/bc_greenhouse_m_1750_2100.nc
+co2vmr=424.98
+ch4vmr=1967.59
+n2vmr=339.54880
+f11vmr=214.780
+f12vmr=479.925
+
+/
+&nudging_nl
+ nudge_model=.true.
+ nudge_path            = '/glade/campaign/cesm/cesmdata/inputdata/atm/cam/met/nudging/MERRA2_fv09_32L/'
+nudge_file_template   = '%y/MERRA2_fv09.cam2.i.%y-%m-%d-%s.nc'
+nudge_beg_day         = 1
+nudge_beg_month       = 1
+nudge_beg_year        = 2025
+nudge_end_day         = 31
+nudge_end_month       = 4
+nudge_end_year        = 2012
+nudge_times_per_day   = 8
+model_times_per_day   = 48
+ nudge_ucoef            = 0.25
+ nudge_uprof            = 2
+ nudge_vcoef            = 0.25
+ nudge_vprof            = 2
+ nudge_tprof = 0
+ nudge_PSprof=0
+ nudge_qprof=0
+ nudge_vwin_lindex = 0.
+ nudge_vwin_hindex = 24.
+ nudge_vwin_hdelta=.1
+ Nudge_Force_Opt = 1
+ Nudge_TimeScale_Opt = 0
+ nudge_PScoef=0
+ nudge_Tcoef=0
+ nudge_qcoef=0
+ nudge_vwin_ldelta=.1
+/
+
+! Suppress all default CAM history output -- only fincl1 below gets written.
+empty_htapes = .true.
+
+! History file 1 (h0): daily average, one file for the whole 3-month spin-up.
+! nhtfrq(1) < 0 means "hours between samples" (-24 = daily); mfilt(1) is the
+! max number of time samples per file -- 100 comfortably covers a ~90-92 day
+! 3-month run (Jan-Mar/Apr-Jun/etc.) in a single file. Increase mfilt(1) (or
+! set it lower to get one file per month/week instead) if that's preferred.
+nhtfrq(1) = -24
+mfilt(1)  = 100
+
+!-------------------------------------------------------------------------------
+! fincl1: CESM/CAM field(s) mapped to each of the 14 OAT "Variables to test".
+! Full derivation/match-quality notes for every field below are in
+! MMPPE-info/OAT_variable_mapping.txt -- summarized here for convenience only.
+!
+! od550aer         -> AODVIS            Aerosol optical depth @550nm (day only)
+! abs550aer        -> AODABS            Absorption optical depth @550nm (day only)
+! ssa550           -> SSAVIS            Single-scatter albedo @550nm (day only)
+! angstrm550_865   -> ANGSTRM_550_865   Angstrom exponent, RRTMG SW bands
+!                                        10/8 (~550/~865nm) -- preferred, see
+!                                        ppe_changes_incorporated.txt 7e
+!                  -> ANGSTRM           Angstrom exponent, RRTMG SW bands
+!                                        11+1/10-1 (400-700nm) -- E3SM
+!                                        reference pair, kept alongside
+!                                        ANGSTRM_550_865 for comparison (see
+!                                        ppe_changes_incorporated.txt 7c)
+! ccns.3           -> CCN7              CCN concentration @S=0.3% (3D, lev) --
+!                                        this is a full profile, not a
+!                                        surface-only field; extract the
+!                                        bottom (surface) model level in
+!                                        post-processing for the true "ccns.3"
+!                                        surface value
+! ccncol.3         -> CCN7COL           Column-integrated CCN @S=0.3%
+! cdnc_incl_ct     -> ACTNL, FCTL       Cloud-top droplet number (grid-mean)
+!                                        and liquid fractional occurrence,
+!                                        first-cloudy-layer method -- true
+!                                        in-cloud value = ACTNL / FCTL
+!                  -> ACTNL_OVL,        Same, but overlap-weighted method
+!                     FCTL_OVL          (in-cloud value = ACTNL_OVL /
+!                                        FCTL_OVL) -- kept alongside
+!                                        ACTNL/FCTL for comparison, see
+!                                        ppe_changes_incorporated.txt 7b
+! clt              -> CLDTOT            Total cloud cover (fraction)
+! cllvi            -> TGCLDLWP          Vertically integrated cloud liquid
+!                                        water path
+! clivi            -> TGCLDIWP          Vertically integrated cloud ice
+!                                        water path
+! pr               -> PRECT             Total precipitation rate (m/s water
+!                                        equivalent; x1000 for kg/m2/s)
+! scre             -> SWCF              Shortwave cloud radiative effect
+!                                        at TOA
+! lcre             -> LWCF              Longwave cloud radiative effect
+!                                        at TOA
+! fnet             -> FSNTOA, FLUT      Net TOA radiation; fnet is not a
+!                                        single native field -- derive as
+!                                        fnet = FSNTOA - FLUT
+!
+! Day-only fields (AODVIS/AODABS/SSAVIS/ANGSTRM/ANGSTRM_550_865) are averaged
+! over valid (daylit) samples only -- CAM's history machinery excludes
+! fillvalue'd night timesteps from the daily average automatically (all were
+! addfld'd with flag_xyfill=.true.), so no separate day+night ("dn") variant
+! is requested here.
+!-------------------------------------------------------------------------------
+fincl1 = 'AODVIS:A', 'AODABS:A', 'SSAVIS:A', 'ANGSTRM_550_865:A', 'ANGSTRM:A',
+   'CCN7:A', 'CCN7COL:A', 'ACTNL:A', 'FCTL:A', 'ACTNL_OVL:A', 'FCTL_OVL:A',
+   'CLDTOT:A', 'TGCLDLWP:A', 'TGCLDIWP:A', 'PRECT:A', 'SWCF:A', 'LWCF:A',
+   'FSNTOA:A', 'FLUT:A'

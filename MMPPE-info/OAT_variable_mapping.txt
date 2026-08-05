@@ -1,0 +1,214 @@
+================================================================================
+MMPPE ONE-AT-A-TIME (OAT) TEST -- "VARIABLES TO TEST" MAPPED TO CESM/CAM6
+(MG2/MAM4) FIELDS
+================================================================================
+Source protocol: MMPPE-info/MMPPE.md, "One-At-a-Time Test" -> "Variables to
+test" table (the 14-variable list used for the 5-day OAT CSV/plot submission,
+NOT the full "Model Output Variables" list further down MMPPE.md).
+Reference for CESM field names/descriptions: MasterFieldList.txt (repo root),
+cross-checked against addfld() calls in the actual Fortran source where
+MasterFieldList.txt was insufficient or silent (noted per-entry below).
+
+This file is scoped narrowly to the 14 OAT variables. Several of them
+reuse mappings already derived for the broader "Model Output Variables"
+tables in 6hourly_variable_mapping.txt / monthly_mean_variable_mapping.txt
+(od550aer/abs550aer <-> TAU_2D_550nm/ABS_2D_550nm, cdnc_incl_ct <->
+ND_INCL_CT, clt/cllvi/clivi/pr, angstrm550_865 <-> ANG_550nm_865nm) --
+those are repeated here for a self-contained OAT reference, with a
+pointer back to the fuller notes. scre, lcre, and fnet do not appear
+anywhere in MMPPE.md's other output tables and are mapped fresh below.
+
+ccns.3/ccncol.3 also reuse a shared mapping now: a new CCN7 (S=0.3%)
+diagnostic bin was added to src/physics/cam/ndrop.F90 (see the "MMPPE OAT
+NOTE" comment above its psat/supersat/ccn_name declarations), giving these
+two, and their counterparts CCNS_0.300/CCN_BURDEN_0.300/CCN_BL1_0.300/
+CCN_0.300 in the other two mapping files, an exact supersaturation match
+in place of the earlier CCN4 (S=0.2%) approximation.
+
+MATCH KEY:
+  EXACT       - same physical quantity, same or directly convertible units
+  CLOSE       - same quantity but with a caveat (weighting, band, phase, etc.)
+  APPROX      - meaningfully different quantity used as the nearest stand-in
+  DERIVED     - not a single field; computable via a stated post-processing
+                recipe from existing CAM output
+  NONE-BEST   - no native CESM field or straightforward derivation exists;
+                entry gives the best available proxy/recipe anyway, per
+                explicit instruction to always propose something rather than
+                leave it blank. Treat these as starting points for custom
+                diagnostic code, not off-the-shelf answers.
+
+================================================================================
+OAT "Variables to test"
+================================================================================
+
+MMPPE Variable:   od550aer
+Description:      Aerosol optical thickness @550nm
+CESM Field:       AODVIS
+Match:            EXACT (day only; AODVISdn for day+night)
+Notes:            Same mapping as TAU_2D_550nm in the main output table
+                  (6hourly_variable_mapping.txt SECTION 2).
+
+MMPPE Variable:   abs550aer
+Description:      Absorption optical thickness @550nm
+CESM Field:       AODABS
+Match:            EXACT (day only; AODABSdn for day+night)
+Notes:            Same mapping as ABS_2D_550nm in the main output table.
+
+MMPPE Variable:   angstrm550_865
+Description:      Angstroem parameter 550nm-865nm
+CESM Field:       ANGSTRM_550_865
+Match:            CLOSE
+Notes:            CAM computes AOD natively only at RRTMG SW band centers
+                  (~350/550/700/865/1020nm-equivalent, see below) -- no
+                  radiative-transfer band boundary sits exactly at 865nm,
+                  so this is not a bit-exact 550.0nm/865.0nm pair, but it
+                  is now a real, purpose-chosen native field rather than a
+                  ported-as-is or offline-derived approximation.
+
+                  A new field, ANGSTRM_550_865, was added to
+                  src/physics/rrtmg/radiation.F90 (see
+                  ppe_changes_incorporated.txt section 7e), alongside (not
+                  replacing) the earlier ANGSTRM field (400-700nm, ported
+                  as-is from MMPPE-info/radiation.F90's E3SM formula -- see
+                  7c). ANGSTRM_550_865 uses RRTMG SW band 10 (441-625nm,
+                  idx_sw_diag -- the same band AODVIS uses) for "550nm" and
+                  band 8 (778-1242nm, idx_sw_diag-2) for "865nm". Band 8
+                  was chosen over band 9 (625-778nm, idx_sw_diag-1, the
+                  next band down) because 865nm falls entirely outside
+                  band 9's range but inside band 8's, and band 8's
+                  log-wavelength center (~983nm) is roughly twice as close
+                  to 865nm in log-space as band 9's (~697nm) is -- see the
+                  code comments in radiation_tend for the full derivation.
+                  Day-only and not on by default; add via fincl. The
+                  400-700nm ANGSTRM and the 550-1020nm AODVIS/AODNIR-derived
+                  fallback recipe both remain available too. Not yet
+                  validated against real model output.
+
+MMPPE Variable:   ssa550
+Description:      Single scattering albedo @550nm
+CESM Field:       SSAVIS
+Match:            EXACT (day only; SSAVISdn for day+night)
+Notes:            SSAVIS ("Aerosol single-scatter albedo") is computed at
+                  550nm in modal_aer_opt.F90, so unlike the main output
+                  table's SSA_2D_440nm request (which is APPROX against
+                  SSAVIS -- wrong wavelength), the OAT test's 550nm request
+                  is an exact wavelength match.
+
+MMPPE Variable:   ccns.3
+Description:      Surface CCN number concentration at S=0.3%
+CESM Field:       CCN7 (S=0.3%, lowest model level)
+Match:            EXACT
+Notes:            CAM6's native CCN supersaturation bins were originally
+                  fixed at 0.02/0.05/0.1/0.2/0.5/1.0% (CCN1..CCN6) with no
+                  0.3% bin. A 7th bin, CCN7 (S=0.3%), was added to
+                  src/physics/cam/ndrop.F90 specifically to give this OAT
+                  variable an exact match -- see the "MMPPE OAT NOTE" comment
+                  above the psat/supersat/ccn_name declarations in that file
+                  for why it was appended as CCN7 rather than inserted
+                  between CCN4 and CCN5 (doing so would have silently
+                  renamed CCN5->0.3%, CCN6->0.5%, etc.). CCN7 is not in any
+                  add_default history list (same as CCN1/2/4/5/6 -- only
+                  CCN3 is on by default), so it must be added explicitly via
+                  fincl in the run's namelist. Previously mapped to CCN4
+                  (S=0.2%, APPROX) before CCN7 existed; see git history of
+                  this file for that mapping if comparing against older runs.
+
+MMPPE Variable:   ccncol.3
+Description:      Column-integrated CCN number concentration at S=0.3%
+CESM Field:       CCN7COL
+Match:            EXACT
+Notes:            CCN7COL ("Column-integrated CCN concentration at S=0.3%",
+                  #/m2) is a new native field added to ndrop.F90, adapted
+                  from E3SM commit 7b12c318's colccn.3 -- but computed from
+                  the real CCN7 (S=0.3%) bin rather than that reference's
+                  CCN-bin-4 (S=0.2%) approximation (see
+                  ppe_changes_incorporated.txt section 7d). No longer needs
+                  a post-processing vertical integration. Not on by
+                  default; add via fincl. Not yet validated against real
+                  model output.
+
+MMPPE Variable:   cdnc_incl_ct
+Description:      Cloud-top in-cloud cloud droplet number concentration
+CESM Field:       ACTNL, or ACTNL_OVL for the overlap-weighted variant
+Match:            CLOSE
+Notes:            ACTNL ("Average Cloud Top droplet number") is a
+                  cloud-top diagnostic computed in micro_mg_cam.F90 as
+                  icwnc_grid * liqcldf_grid (in-cloud number times liquid
+                  cloud fraction) at the topmost cloudy level -- i.e. it is
+                  a GRID-BOX-MEAN value, not a pure in-cloud value. To
+                  recover the true in-cloud cloud-top CDNC the protocol
+                  variable name implies, divide by FCTL ("Fractional
+                  occurrence of cloud top liquid", also output by
+                  micro_mg_cam.F90): in-cloud CDNC_ct = ACTNL / FCTL.
+                  Same mapping as ND_INCL_CT in the main output table.
+
+                  ACTNL only accounts for the FIRST cloudy level found
+                  scanning down from top_lev, with no cloud-overlap
+                  weighting across layers. A second field, ACTNL_OVL, was
+                  added alongside it (not replacing it) that instead
+                  accumulates contributions from every cloud-top-exposed
+                  layer using a maximum-random overlap assumption --
+                  adapted from MMPPE-info/output_aerocom_aie.F90's
+                  cloud_top_aerocom subroutine, which is the algorithm
+                  MMPPE.md's "Cloud-top calculation" note (see
+                  MMPPE-info/cloud-top-calculation.F90) actually
+                  specifies. Same grid-mean convention and normalization
+                  (divide by FCTL_OVL) applies. Not yet validated against
+                  real model output -- both fields should be compared once
+                  a run is available. See ppe_changes_incorporated.txt
+                  section 7b for full detail.
+
+MMPPE Variable:   clt
+Description:      Total cloud cover
+CESM Field:       CLDTOT
+Match:            EXACT
+Notes:            CLDTOT is a fraction (0-1); multiply by 100 if the
+                  protocol's CSV expects percent.
+
+MMPPE Variable:   cllvi
+Description:      Vertically integrated cloud water
+CESM Field:       TGCLDLWP
+Match:            EXACT
+
+MMPPE Variable:   clivi
+Description:      Vertically integrated cloud ice
+CESM Field:       TGCLDIWP
+Match:            EXACT
+
+MMPPE Variable:   pr
+Description:      Surface precipitation flux
+CESM Field:       PRECT
+Match:            CLOSE
+Notes:            PRECT is a liquid-water-equivalent RATE in m/s; multiply
+                  by the density of water (1000 kg/m3) to get kg m-2 s-1.
+
+MMPPE Variable:   scre
+Description:      Shortwave cloud radiative effect at TOA
+CESM Field:       SWCF
+Match:            EXACT
+Notes:            SWCF is computed in radiation.F90 as FSNTOA - FSNTOAC
+                  (all-sky minus clear-sky net SW at TOA) -- the standard
+                  SWCRE/CERES-style definition; typically negative
+                  (cooling).
+
+MMPPE Variable:   lcre
+Description:      Longwave cloud radiative effect at TOA
+CESM Field:       LWCF
+Match:            EXACT
+Notes:            LWCF is computed in radiation.F90 as FLUTC - FLUT
+                  (clear-sky minus all-sky outgoing LW at TOA); typically
+                  positive (warming).
+
+MMPPE Variable:   fnet
+Description:      Net radiation flux at TOA
+CESM Field:       derive: FSNTOA - FLUT
+Match:            DERIVED
+Notes:            No single native "net TOA flux" field. FSNTOA (net SW
+                  at TOA, down positive) minus FLUT (outgoing LW at TOA)
+                  gives net downward radiative flux at TOA. Equivalently,
+                  SOLIN - FSUTOA - FLUT, using the same three native
+                  fields the main output table maps to rsdt/rsut/rlut.
+
+================================================================================
+END OF FILE
+================================================================================

@@ -923,6 +923,23 @@ subroutine micro_mg_cam_init(pbuf2d)
    call addfld ('FCTL',        horiz_only,   'A', 'fraction', 'Fractional occurrence of cloud top liquid'                         )
    call addfld ('FCTI',        horiz_only,   'A', 'fraction', 'Fractional occurrence of cloud top ice'                            )
 
+   ! MMPPE: overlap-weighted cloud-top particle size/number/frequency, added ALONGSIDE (not
+   ! replacing) ACTREL/ACTREI/ACTNL/ACTNI/FCTL/FCTI above, for direct output comparison. The
+   ! "ACT*"/"FCT*" fields above stop scanning at the FIRST cloudy level below top_lev; the
+   ! "*_OVL" fields below instead accumulate contributions from every cloud-top-exposed layer
+   ! in the column using a maximum-random cloud-overlap assumption, following the AeroCom
+   ! AIE cloud-top diagnostic algorithm referenced by MMPPE.md's "Cloud-top calculation" note
+   ! (see MMPPE-info/cloud-top-calculation.F90 and MMPPE-info/output_aerocom_aie.F90,
+   ! subroutine cloud_top_aerocom, for the source algorithm this was adapted from). Same
+   ! grid-mean (not in-cloud) convention as ACTNL/ACTREL: divide by FCTL_OVL/FCTI_OVL to
+   ! recover true in-cloud cloud-top values.
+   call addfld ('ACTREL_OVL',  horiz_only,   'A', 'Micron',   'Overlap-weighted Cloud Top droplet effective radius'               )
+   call addfld ('ACTREI_OVL',  horiz_only,   'A', 'Micron',   'Overlap-weighted Cloud Top ice effective radius'                   )
+   call addfld ('ACTNL_OVL',   horiz_only,   'A', 'm-3',      'Overlap-weighted Cloud Top droplet number'                         )
+   call addfld ('ACTNI_OVL',   horiz_only,   'A', 'm-3',      'Overlap-weighted Cloud Top ice number'                             )
+   call addfld ('FCTL_OVL',    horiz_only,   'A', 'fraction', 'Overlap-weighted fractional occurrence of cloud top liquid'        )
+   call addfld ('FCTI_OVL',    horiz_only,   'A', 'fraction', 'Overlap-weighted fractional occurrence of cloud top ice'           )
+
    ! New frequency arrays for mixed phase and supercooled liquid (only and mixed) for (a) Cloud Top and (b) everywhere..
    call addfld ('FREQM',       (/ 'lev' /),  'A', 'fraction', 'Fractional occurrence of mixed phase'                              )
    call addfld ('FREQSL',      (/ 'lev' /),  'A', 'fraction', 'Fractional occurrence of only supercooled liquid'                  )
@@ -1575,6 +1592,19 @@ subroutine micro_mg_cam_tend_pack(state, ptend, dtime, pbuf, mgncol, mgcols, nle
    real(r8) :: ctni_grid(pcols)
    real(r8) :: fcti_grid(pcols)
    real(r8) :: fctl_grid(pcols)
+
+   ! MMPPE: overlap-weighted counterparts of the above (see addfld comment for ACTREL_OVL etc.)
+   real(r8) :: ctrel_ovl_grid(pcols)
+   real(r8) :: ctrei_ovl_grid(pcols)
+   real(r8) :: ctnl_ovl_grid(pcols)
+   real(r8) :: ctni_ovl_grid(pcols)
+   real(r8) :: fctl_ovl_grid(pcols)
+   real(r8) :: fcti_ovl_grid(pcols)
+   real(r8) :: cldwork_ovl(pcols,pver)     ! local working copy of total cloud fraction for overlap threading
+   real(r8) :: clr_ovl(pcols)              ! running clear-sky fraction "seen from above" (max-random overlap)
+   real(r8) :: fr_ovl                      ! this-layer clear-fraction ratio (see cloud_top_aerocom "fr")
+   real(r8) :: dfrac_ovl                   ! newly-exposed cloud fraction at this layer
+   real(r8), parameter :: max_cld_ovl = 1._r8 - 1.0e-9_r8  ! overlap-formula denominator guard
 
    real(r8) :: ftem_grid(pcols,pver)
 
@@ -2915,6 +2945,62 @@ subroutine micro_mg_cam_tend_pack(state, ptend, dtime, pbuf, mgncol, mgcols, nle
       end do
    end do
 
+   ! MMPPE: overlap-weighted cloud-top diagnostics, additive alongside the ACT*_grid/FCT*_grid
+   ! block above (see the ACTREL_OVL addfld comment for full context). Adapted from
+   ! MMPPE-info/output_aerocom_aie.F90's cloud_top_aerocom subroutine, maximum-random-overlap
+   ! branch (the only branch that subroutine was ever run with in production), itself following
+   ! MMPPE-info/cloud-top-calculation.F90. Instead of stopping at the first cloudy level below
+   ! top_lev like the block above, this walks every level and accumulates the cloud fraction
+   ! newly exposed "looking down from clear sky" at each layer, combined with the layer above
+   ! via the standard maximum-random overlap formula. liqcldf_grid and icecldf_grid are
+   ! identical arrays in this configuration (both are copies of the pbuf 'AST' stratiform cloud
+   ! fraction -- see their assignment above), so a single working array (cldwork_ovl) drives the
+   ! overlap threading for both phases; icwmrst_grid/icimrst_grid (in-cloud condensate) gate
+   ! which phase accumulator receives each layer's contribution, using the same thresholds as
+   ! the block above. Uppermost level (top_lev-1) is treated as cloud-free, matching both source
+   ! algorithms' stated assumption.
+   ctrel_ovl_grid = 0._r8
+   ctrei_ovl_grid = 0._r8
+   ctnl_ovl_grid  = 0._r8
+   ctni_ovl_grid  = 0._r8
+   fctl_ovl_grid  = 0._r8
+   fcti_ovl_grid  = 0._r8
+
+   cldwork_ovl(:ngrdcol,:) = 0._r8
+   do k = top_lev, pver
+      do i = 1, ngrdcol
+         if (liqcldf_grid(i,k) > 0.01_r8) cldwork_ovl(i,k) = liqcldf_grid(i,k)
+      end do
+   end do
+
+   do i = 1, ngrdcol
+      clr_ovl(i) = 1._r8   ! fully clear, as seen from above the model top
+      do k = top_lev, pver
+         if (cldwork_ovl(i,k) > 0._r8) then
+            ! Maximum-random overlap: fraction of the current clear-sky view that stays
+            ! clear after combining this layer with the layer immediately above it.
+            fr_ovl = (1._r8 - min(max(cldwork_ovl(i,k), cldwork_ovl(i,k-1)), max_cld_ovl)) &
+                   / (1._r8 - min(cldwork_ovl(i,k-1), max_cld_ovl))
+            fr_ovl = min(1._r8, fr_ovl)
+
+            dfrac_ovl = clr_ovl(i) * (1._r8 - fr_ovl)  ! newly-exposed cloud fraction at this layer
+
+            if (icwmrst_grid(i,k) > 1.e-7_r8) then
+               ctrel_ovl_grid(i) = ctrel_ovl_grid(i) + rel_grid(i,k)   * dfrac_ovl
+               ctnl_ovl_grid(i)  = ctnl_ovl_grid(i)  + icwnc_grid(i,k) * dfrac_ovl
+               fctl_ovl_grid(i)  = fctl_ovl_grid(i)  + dfrac_ovl
+            end if
+            if (icimrst_grid(i,k) > 1.e-7_r8) then
+               ctrei_ovl_grid(i) = ctrei_ovl_grid(i) + rei_grid(i,k)   * dfrac_ovl
+               ctni_ovl_grid(i)  = ctni_ovl_grid(i)  + icinc_grid(i,k) * dfrac_ovl
+               fcti_ovl_grid(i)  = fcti_ovl_grid(i)  + dfrac_ovl
+            end if
+
+            clr_ovl(i) = clr_ovl(i) * fr_ovl
+         end if
+      end do
+   end do
+
    ! Evaporation of stratiform precipitation fields for UNICON
    evprain_st_grid(:ngrdcol,:pver) = nevapr_grid(:ngrdcol,:pver) - evpsnow_st_grid(:ngrdcol,:pver)
    do k = top_lev, pver
@@ -3054,6 +3140,12 @@ subroutine micro_mg_cam_tend_pack(state, ptend, dtime, pbuf, mgncol, mgcols, nle
    call outfld('ACTNI',       ctni_grid,        pcols, lchnk)
    call outfld('FCTL',        fctl_grid,        pcols, lchnk)
    call outfld('FCTI',        fcti_grid,        pcols, lchnk)
+   call outfld('ACTREL_OVL',  ctrel_ovl_grid,   pcols, lchnk)
+   call outfld('ACTREI_OVL',  ctrei_ovl_grid,   pcols, lchnk)
+   call outfld('ACTNL_OVL',   ctnl_ovl_grid,    pcols, lchnk)
+   call outfld('ACTNI_OVL',   ctni_ovl_grid,    pcols, lchnk)
+   call outfld('FCTL_OVL',    fctl_ovl_grid,    pcols, lchnk)
+   call outfld('FCTI_OVL',    fcti_ovl_grid,    pcols, lchnk)
    call outfld('ICINC',       icinc_grid,       pcols, lchnk)
    call outfld('ICWNC',       icwnc_grid,       pcols, lchnk)
    call outfld('EFFLIQ_IND',  rel_fn_grid,      pcols, lchnk)

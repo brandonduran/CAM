@@ -48,11 +48,17 @@ real(r8) :: third, twothird, sixth, zero
 real(r8) :: sq2, sqpi
 
 ! CCN diagnostic fields
-integer,  parameter :: psat=6    ! number of supersaturations to calc ccn concentration
+! MMPPE OAT NOTE: CCN7/0.3% was appended (out of ascending order) rather than
+! inserted between the existing 0.2%/0.5% entries so that CCN1..CCN6 keep
+! their original supersaturation identities (CCN5 stays 0.5%, CCN6 stays
+! 1.0%, etc.) -- added to give an exact CESM equivalent for the MMPPE OAT
+! "ccns.3"/"ccncol.3" (surface / column CCN at S=0.3%) variables, which
+! previously had no exact bin and were approximated via CCN4 (S=0.2%).
+integer,  parameter :: psat=7    ! number of supersaturations to calc ccn concentration
 real(r8), parameter :: supersat(psat)= & ! supersaturation (%) to determine ccn concentration
-                       (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.2_r8, 0.5_r8, 1.0_r8 /)
+                       (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.2_r8, 0.5_r8, 1.0_r8, 0.3_r8 /)
 character(len=8) :: ccn_name(psat)= &
-                    (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6'/)
+                    (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6','CCN7'/)
 
 ! indices in state and pbuf structures
 integer :: numliq_idx = -1
@@ -253,6 +259,22 @@ subroutine ndrop_init
    call addfld('CCN4',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.2%')
    call addfld('CCN5',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.5%')
    call addfld('CCN6',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=1.0%')
+   ! MMPPE OAT: exact-match bin for ccns.3/ccncol.3 (S=0.3%); see psat/supersat/
+   ! ccn_name note above for why this is appended as CCN7 instead of being
+   ! inserted between CCN4 and CCN5.
+   call addfld('CCN7',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.3%')
+
+   ! MMPPE: native column-integrated and 1km-AGL CCN@S=0.3% diagnostics, giving
+   ! ccncol.3/CCN_BURDEN_0.300 and CCN_BL1_0.300 real model output instead of a
+   ! post-processing recipe. Formula (column integration via pdel/gravit/density,
+   ! linear interpolation to exactly 1km AGL) adapted from E3SM commit 7b12c318
+   ! (github.com/E3SM-Project/E3SM), which implements the equivalent colccn.3/
+   ! ccn.3bl fields -- but that reference code actually uses CCN bin 4 (S=0.2%)
+   ! mislabeled as "colccn.3"/"ccn.3bl" (same CCN4-as-0.3% approximation we found
+   ! and fixed elsewhere on this branch); this uses the real CCN7 (S=0.3%) bin
+   ! added above instead.
+   call addfld('CCN7COL', horiz_only, 'A', '#/m2', 'Column-integrated CCN concentration at S=0.3%')
+   call addfld('CCN7BL',  horiz_only, 'A', '#/m3', 'CCN concentration at S=0.3% at 1km above surface')
 
 
    call addfld('WTKE',     (/ 'lev' /), 'A', 'm/s', 'Standard deviation of updraft velocity')
@@ -419,6 +441,15 @@ subroutine dropmixnuc( &
    real(r8), allocatable :: coltend(:,:)       ! column tendency for diagnostic output
    real(r8), allocatable :: coltend_cw(:,:)    ! column tendency
    real(r8) :: ccn(pcols,pver,psat)    ! number conc of aerosols activated at supersat
+
+   ! MMPPE: column-integrated / 1km-AGL CCN@S=0.3% diagnostics (see CCN7COL/CCN7BL
+   ! addfld comment above)
+   real(r8) :: ccn7col(pcols)
+   real(r8) :: ccn7bl(pcols)
+   real(r8) :: zi2_ccn7(pver+1)   ! interface height AGL (m), surface-up
+   real(r8) :: zm2_ccn7(pver)     ! mid-level height AGL (m), surface-up
+   integer  :: idx1000_ccn7       ! level index bracketing 1km AGL
+   logical  :: found1000_ccn7
 
    !for gas species turbulent mixing
    real(r8), pointer :: rgas(:, :, :)
@@ -1167,6 +1198,39 @@ subroutine dropmixnuc( &
    do l = 1, psat
       call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
    enddo
+
+   ! MMPPE: column-integrated and 1km-AGL CCN@S=0.3% (CCN7COL/CCN7BL), adapted from
+   ! E3SM commit 7b12c318's colccn.3/ccn.3bl (see CCN7COL addfld comment above for
+   ! why this uses CCN7 rather than that reference's CCN-bin-4 approximation). cs(i,k)
+   ! is air density (kg/m3), already computed above; pdel(i,k)/gravit/cs(i,k) is the
+   ! layer thickness in meters.
+   ccn7col = 0._r8
+   ccn7bl  = 0._r8
+   do i = 1, ncol
+      do k = 1, pver
+         ccn7col(i) = ccn7col(i) + ccn(i,k,7) * 1.0e6_r8 * pdel(i,k)/gravit/cs(i,k)  ! #/cm3 --> #/m2
+      end do
+
+      ! Find the level bracketing 1km AGL, scanning from the surface upward, then
+      ! linearly interpolate CCN7 to exactly 1km AGL.
+      zi2_ccn7 = 0._r8
+      zm2_ccn7 = 0._r8
+      found1000_ccn7 = .true.
+      idx1000_ccn7 = pver - 1   ! defensive fallback; always overwritten in practice
+      do k = pver, 1, -1
+         zi2_ccn7(k) = zi2_ccn7(k+1) + pdel(i,k)/gravit/cs(i,k)
+         zm2_ccn7(k) = (zi2_ccn7(k+1) + zi2_ccn7(k)) / 2._r8
+         if (zm2_ccn7(k) > 1000._r8 .and. found1000_ccn7) then
+            idx1000_ccn7 = min(k, pver-1)
+            found1000_ccn7 = .false.
+         end if
+      end do
+      ccn7bl(i) = (ccn(i,idx1000_ccn7,  7) * (1000._r8 - zm2_ccn7(idx1000_ccn7+1)) +   &
+                   ccn(i,idx1000_ccn7+1,7) * (zm2_ccn7(idx1000_ccn7) - 1000._r8)  ) /   &
+                  (zm2_ccn7(idx1000_ccn7) - zm2_ccn7(idx1000_ccn7+1)) * 1.0e6_r8        ! #/cm3 --> #/m3
+   end do
+   call outfld('CCN7COL', ccn7col, pcols, lchnk)
+   call outfld('CCN7BL',  ccn7bl,  pcols, lchnk)
 
    ! do column tendencies
    if (prog_modal_aero) then

@@ -1,0 +1,720 @@
+================================================================================
+MMPPE 6-HOURLY INSTANTANEOUS OUTPUT -- MAPPING TO CESM/CAM6 (MG2/MAM4) FIELDS
+================================================================================
+Source protocol: MMPPE-info/MMPPE.md, "Model Output Variables" ->
+  "6-hourly Instantaneous" and "6-hourly Instantaneous (optional)".
+Reference for CESM field names/descriptions: MasterFieldList.txt (repo root),
+cross-checked against addfld() calls in the actual Fortran source where
+MasterFieldList.txt was insufficient or silent (noted per-entry below).
+
+IMPORTANT CAVEAT ON MasterFieldList.txt: it contains ZERO fields with "MODIS"
+in the name, meaning it was generated from a build with COSP disabled. All
+"modis_*" mappings below (the entire optional table) were instead verified
+directly against src/physics/cam/cospsimulator_intr.F90's addfld() calls,
+which ARE present in this checkout (added in commit 57bc5465, "Add COSP
+MODIS LWP/IWP joint histograms and CFODD warm-rain diagnostics"). Those
+fields only appear in actual model output if the run is configured with
+-cosp and the MODIS simulator sub-package turned on.
+
+MATCH KEY:
+  EXACT       - same physical quantity, same or directly convertible units
+  CLOSE       - same quantity but with a caveat (weighting, band, phase, etc.)
+  APPROX      - meaningfully different quantity used as the nearest stand-in
+  DERIVED     - not a single field; computable via a stated post-processing
+                recipe from existing CAM output
+  NONE-BEST   - no native CESM field or straightforward derivation exists;
+                entry gives the best available proxy/recipe anyway, per
+                explicit instruction to always propose something rather than
+                leave it blank. Treat these as starting points for custom
+                diagnostic code, not off-the-shelf answers.
+
+================================================================================
+SECTION 1: 6-hourly Instantaneous -- 3D (lev, lat, lon)
+================================================================================
+
+MMPPE Variable:   aerosol_extinction_355nm
+Description:      Aerosol extinction @355nm
+Unit (MMPPE):     m-1
+CESM Field:       EXTINCTUV
+Match:            APPROX
+Notes:            CAM computes aerosol extinction natively only at 550nm
+                  (EXTINCT), 350nm (EXTINCTUV), and 1020nm (EXTINCTNIR) --
+                  no 355nm band. EXTINCTUV (350nm) is the nearest available.
+                  "day only" (masked to daylit columns); day+night variant
+                  EXTINCTUVdn also exists. Protocol says model output must be
+                  interpolated to 8 fixed altitudes in post-processing
+                  regardless of which band is used.
+
+================================================================================
+SECTION 2: 6-hourly Instantaneous -- 2D (lat, lon), main table
+================================================================================
+
+MMPPE Variable:   TAU_2D_550nm
+Description:      Aerosol optical thickness @550nm
+Unit:             1
+CESM Field:       AODVIS
+Match:            EXACT (day only; AODVISdn for day+night)
+
+MMPPE Variable:   ABS_2D_550nm
+Description:      Absorption optical thickness @550nm
+Unit:             1
+CESM Field:       AODABS
+Match:            EXACT (day only; AODABSdn for day+night)
+
+MMPPE Variable:   SSA_2D_440nm
+Description:      Single scattering albedo @440nm
+Unit:             1
+CESM Field:       SSAVIS
+Match:            APPROX
+Notes:            SSAVIS is single-scatter albedo at 550nm, not 440nm; no
+                  440nm SSA field exists.
+
+MMPPE Variable:   ANG_440nm_670nm
+Description:      Angstroem parameter 440nm-670nm
+Unit:             1
+CESM Field:       ANGSTRM (new field, 400nm-700nm), or derive from AODUV
+                  (350nm) and AODVIS (550nm) as a fallback
+Match:            NONE-BEST
+Notes:            A new ANGSTRM field was added to src/physics/rrtmg/
+                  radiation.F90 (see ppe_changes_incorporated.txt section
+                  7c) -- computed as a real model diagnostic between the
+                  400nm and 700nm SW bands (RRTMG bands idx_sw_diag+1/
+                  idx_sw_diag-1), using the exact formula/band choice from
+                  MMPPE-info/radiation.F90 (a legacy E3SM radiation driver),
+                  which is a real, previously-validated AeroCom-submission
+                  diagnostic -- not tuned to match this protocol's
+                  440-670nm request specifically. It brackets a similar
+                  (broader) range, so it's arguably the better proxy of the
+                  two options here, but still not exact. The older
+                  AODUV/AODVIS-derived recipe (Angstrom =
+                  -ln(AODVIS/AODUV)/ln(550/350), 350-550nm) remains
+                  available as a fallback if 400-700nm is judged too wide.
+                  A second native field, ANGSTRM_550_865 (~550-865nm, see
+                  ppe_changes_incorporated.txt section 7e), also exists now
+                  but is a worse match here than ANGSTRM -- 440-670nm sits
+                  closer to 400-700nm than to 550-865nm. ANGSTRM is
+                  day-only and not on by default; add via fincl.
+                  Not yet validated against real model output.
+
+MMPPE Variable:   TAU_2D_MODE_KS_550nm / _AS_ / _CS_ / _KI_ / _AI_ / _CI_
+Description:      Optical thickness by mode (ECHAM-HAM Aitken/Accum/Coarse x
+                  Soluble/Insoluble split)
+Unit:             1
+CESM Field:       AODDUST, AODSO4, AODPOM, AODSOA, AODBC, AODSS (all @550nm)
+Match:            NONE-BEST (axis mismatch)
+Notes:            MAM4 has 4 SIZE modes (accumulation a1, Aitken a2, coarse
+                  a3, primary-carbon a4) with no soluble/insoluble split, so
+                  there is no way to populate the literal KS/AS/CS/KI/AI/CI
+                  breakdown the protocol names (that's ECHAM-HAM's mode
+                  structure, not MAM4's). CAM6 does provide a PER-SPECIES
+                  (not per-mode) 550nm AOD decomposition instead: AODDUST,
+                  AODSO4, AODPOM, AODSOA, AODBC, AODSS (each also has a "dn"
+                  day+night variant). If a species-based contributor
+                  breakdown satisfies the intent of this row, that's the
+                  real, already-implemented option; the mode-based version
+                  the protocol literally asks for does not exist and would
+                  need new code in modal_aer_opt.F90.
+
+MMPPE Variable:   burden_bc
+Description:      Atmospheric burden of BC
+Unit:             kg m-2
+CESM Field:       BURDENBC
+Match:            EXACT (day only)
+
+MMPPE Variable:   burden_du
+Description:      Atmospheric burden of DU
+Unit:             kg m-2
+CESM Field:       BURDENDUST
+Match:            EXACT (day only)
+
+MMPPE Variable:   burden_oc
+Description:      Atmospheric burden of OC
+Unit:             kg m-2
+CESM Field:       BURDENPOM
+Match:            EXACT (day only)
+Notes:            CAM calls organic carbon "POM" (primary organic matter).
+
+MMPPE Variable:   burden_so4
+Description:      Atmospheric burden of SO4
+Unit:             kg m-2
+CESM Field:       BURDENSO4
+Match:            EXACT (day only)
+
+MMPPE Variable:   burden_ss
+Description:      Atmospheric burden of SS
+Unit:             kg m-2
+CESM Field:       BURDENSEASALT
+Match:            EXACT (day only)
+
+MMPPE Variable:   burden_wat
+Description:      Atmospheric burden of WAT (aerosol water)
+Unit:             kg m-2
+CESM Field:       derive from wat_a1 + wat_a2 + wat_a3 + wat_a4
+Match:            DERIVED
+Notes:            Per-mode interstitial aerosol water exists as 3D fields
+                  (wat_a1..wat_a4) but no pre-summed column burden field.
+                  Sum across modes and integrate vertically in
+                  post-processing.
+
+MMPPE Variable:   burden_icnc
+Description:      Atmospheric burden of ICNC
+Unit:             m-2
+CESM Field:       TMNUMICE
+Match:            APPROX
+Notes:            TM<name> column-burden fields are auto-generated for every
+                  constituent as a mass-basis vertical integral. NUMICE is a
+                  NUMBER mixing ratio (#/kg), so TMNUMICE numerically gives
+                  #/m2 despite being mislabeled "kg/m2" in the generic field
+                  list -- double check units before use.
+
+MMPPE Variable:   burden_cdnc
+Description:      Atmospheric burden of CDNC
+Unit:             m-2
+CESM Field:       TMNUMLIQ
+Match:            APPROX (same unit-label caveat as burden_icnc)
+
+MMPPE Variable:   CN_BURDEN
+Description:      Condensation nuclei number burden (>200nm diameter, i.e.
+                  radius > 1.0E-7 m)
+Unit:             m-2
+CESM Field:       derive from TMnum_a1 + TMnum_a2 + TMnum_a3 + TMnum_a4
+Match:            NONE-BEST
+Notes:            No size-thresholded number-burden diagnostic exists in
+                  stock CAM6/MAM4. Summing all 4 modes' number burdens gives
+                  a rough TOTAL condensation-nuclei burden, but is NOT
+                  restricted to particles above the 100nm radius cutoff the
+                  protocol specifies -- a true match would need a modal
+                  cumulative-lognormal calculation (using each mode's number,
+                  dgnum, and sigma) integrated above r=100nm, which is not
+                  implemented anywhere in this codebase.
+
+MMPPE Variable:   N70
+Description:      Number conc. of aerosol particles >70nm diameter @surface
+Unit:             m-3
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            No size-binned surface number-concentration diagnostic
+                  exists. Would require the same cumulative-lognormal
+                  calculation described under CN_BURDEN, evaluated at the
+                  surface level and for a 35nm radius cutoff.
+
+MMPPE Variable:   N100
+Description:      Number conc. of aerosol particles >100nm diameter @surface
+Unit:             m-3
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            Same as N70, for a 50nm radius cutoff.
+
+MMPPE Variable:   CCN_BURDEN_0.100
+Description:      CCN burden at S=0.1%
+Unit:             m-2
+CESM Field:       derive from CCN3 (S=0.1%, #/cm3, 3D, 70 lev)
+Match:            DERIVED
+Notes:            No column-integrated CCN burden field exists; vertically
+                  integrate CCN3 in post-processing.
+
+MMPPE Variable:   CCN_BURDEN_0.300
+Description:      CCN burden at S=0.3%
+Unit:             m-2
+CESM Field:       CCN7COL
+Match:            EXACT
+Notes:            CCN7COL ("Column-integrated CCN concentration at S=0.3%",
+                  #/m2) is a new native field added to ndrop.F90, adapted
+                  from E3SM commit 7b12c318's colccn.3 field -- but computed
+                  from the real CCN7 (S=0.3%) bin (see "MMPPE OAT NOTE"
+                  comment above ndrop.F90's psat/supersat/ccn_name
+                  declarations) rather than that reference's CCN-bin-4
+                  (S=0.2%) approximation. No longer needs a post-processing
+                  vertical integration -- see ppe_changes_incorporated.txt
+                  section 7d. Not on by default; add via fincl. Previously
+                  mapped to CCN4 (APPROX+DERIVED), then to a CCN7-based
+                  DERIVED recipe, before CCN7COL existed. Not yet validated
+                  against real model output.
+
+MMPPE Variable:   CCN_BL1_0.100
+Description:      CCN at 1km above surface, S=0.1%
+Unit:             m-3
+CESM Field:       CCN3 (interpolate 3D field to 1km AGL)
+Match:            DERIVED
+
+MMPPE Variable:   CCN_BL1_0.300
+Description:      CCN at 1km above surface, S=0.3%
+Unit:             m-3
+CESM Field:       CCN7BL
+Match:            EXACT
+Notes:            CCN7BL ("CCN concentration at S=0.3% at 1km above
+                  surface", #/m3) is a new native field added to ndrop.F90,
+                  adapted from E3SM commit 7b12c318's ccn.3bl field --
+                  linearly interpolated to exactly 1km AGL from the real
+                  CCN7 (S=0.3%) bin, rather than that reference's CCN-bin-4
+                  (S=0.2%) approximation (see CCN_BURDEN_0.300 note above).
+                  No longer needs a post-processing interpolation -- see
+                  ppe_changes_incorporated.txt section 7d. Not on by
+                  default; add via fincl. Previously mapped to CCN4
+                  (APPROX+DERIVED), then to a CCN7-based DERIVED recipe,
+                  before CCN7BL existed. Not yet validated against real
+                  model output.
+
+MMPPE Variable:   CCNS_0.100
+Description:      CCN at surface, S=0.1%
+Unit:             m-3
+CESM Field:       CCN3 (lowest model level)
+Match:            CLOSE
+
+MMPPE Variable:   CCNS_0.300
+Description:      CCN at surface, S=0.3%
+Unit:             m-3
+CESM Field:       CCN7 (S=0.3%, lowest model level)
+Match:            EXACT
+Notes:            See CCN_BURDEN_0.300 note above re: the new CCN7 (S=0.3%)
+                  bin added to ndrop.F90. Previously mapped to CCN4 (0.2%,
+                  APPROX) before CCN7 existed.
+
+MMPPE Variable:   SO4
+Description:      Surface SO4 mass concentration
+Unit:             kg m-3
+CESM Field:       derive from so4_a1 + so4_a2 + so4_a3 (kg/kg -> x air
+                  density, surface level)
+Match:            DERIVED
+Notes:            No pre-computed surface mass-concentration field for any
+                  species; the conversion pattern (mixing ratio x density,
+                  masked/summed across modes) already exists for PM2.5 in
+                  modal_aero_wateruptake.F90 (PM25/PM25_SRF) and can be
+                  adapted.
+
+MMPPE Variable:   SO4_bl
+Description:      SO4 mass concentration at 1km above ground
+Unit:             kg m-3
+CESM Field:       same tracers as SO4, interpolated to 1km AGL
+Match:            DERIVED
+
+MMPPE Variable:   ND_INCL_CT
+Description:      Cloud-top in-cloud cloud droplet number concentration
+Unit:             m-3
+CESM Field:       ACTNL (grid-mean; divide by FCTL for true in-cloud value),
+                  or ACTNL_OVL / FCTL_OVL for the overlap-weighted variant
+Match:            CLOSE
+Notes:            ACTNL ("Average Cloud Top droplet number") is computed in
+                  micro_mg_cam.F90 as icwnc_grid * liqcldf_grid at the FIRST
+                  cloudy level found scanning down from top_lev -- a
+                  grid-box-mean value (divide by FCTL for the true in-cloud
+                  value the protocol name implies), with no cloud-overlap
+                  weighting across layers.
+
+                  ACTNL_OVL was added alongside ACTNL (not replacing it) to
+                  give a second option that properly accumulates
+                  contributions from every cloud-top-exposed layer using a
+                  maximum-random overlap assumption, adapted from
+                  MMPPE-info/output_aerocom_aie.F90's cloud_top_aerocom
+                  subroutine -- the algorithm MMPPE.md's "Cloud-top
+                  calculation" note (MMPPE-info/cloud-top-calculation.F90)
+                  actually specifies, and a materially better approximation
+                  when clouds are broken/multi-layered. Same grid-mean
+                  convention; divide by FCTL_OVL for the in-cloud value.
+                  Not yet validated against real model output -- see
+                  ppe_changes_incorporated.txt section 7b.
+
+MMPPE Variable:   CDR_CT
+Description:      Cloud-top effective radius (liquid)
+Unit:             micron
+CESM Field:       ACTREL, or ACTREL_OVL for the overlap-weighted variant
+Match:            EXACT
+Notes:            "Average Cloud Top droplet effective radius" -- same
+                  micro_mg_cam.F90 cloud-top diagnostic family as ND_INCL_CT,
+                  including the same first-cloudy-layer-only caveat and the
+                  new ACTREL_OVL alternative (see ND_INCL_CT notes above).
+
+MMPPE Variable:   ICR_CT
+Description:      Cloud-top ice crystal effective radius
+Unit:             micron
+CESM Field:       ACTREI, or ACTREI_OVL for the overlap-weighted variant
+Match:            EXACT
+Notes:            "Average Cloud Top ice effective radius", same family and
+                  same ACTREI_OVL caveat/alternative as ND_INCL_CT above.
+
+MMPPE Variable:   clt
+Description:      Total cloud cover
+Unit:             m2 m-2
+CESM Field:       CLDTOT
+Match:            EXACT
+
+MMPPE Variable:   lcc
+Description:      Liquid cloud cover
+Unit:             m2 m-2
+CESM Field:       FCTL
+Match:            APPROX
+Notes:            FCTL is "Fractional occurrence of cloud-top liquid" (a
+                  cloud-TOP diagnostic from micro_mg_cam.F90's ACTREL/ACTNL
+                  family), not a total-column liquid-cloud fraction -- a
+                  narrower quantity than what "liquid cloud cover" usually
+                  means. If COSP is enabled, CLWMODIS ("MODIS Liquid Cloud
+                  Fraction", see optional-table section below) is the
+                  better semantic match, at the cost of requiring the MODIS
+                  simulator to be on.
+
+MMPPE Variable:   icc
+Description:      Ice cloud cover
+Unit:             m2 m-2
+CESM Field:       FCTI
+Match:            APPROX
+Notes:            Same caveat as lcc; COSP's CLIMODIS is the better semantic
+                  match if available.
+
+MMPPE Variable:   cod
+Description:      Cloud optical depth
+Unit:             1
+CESM Field:       TOT_CLD_VISTAU (3D, 70 lev) or, if COSP enabled, TAUTMODIS
+Match:            APPROX + DERIVED
+Notes:            No native 2D "column cloud optical depth" field.
+                  TOT_CLD_VISTAU is per-layer and would need a column
+                  reduction. TAUTMODIS (COSP) is 2D but is CLTMODIS-weighted
+                  ("MODIS Total Cloud Optical Thickness*CLTMODIS" per its
+                  long_name) -- divide by CLTMODIS/100 to recover the true
+                  in-cloud mean if that's what's wanted.
+
+MMPPE Variable:   codliq
+Description:      Cloud optical depth due to liquid
+Unit:             1
+CESM Field:       LIQ_ICLD_VISTAU (3D) or TAUWMODIS (COSP, CLWMODIS-weighted)
+Match:            APPROX + DERIVED
+
+MMPPE Variable:   codice
+Description:      Cloud optical depth due to ice
+Unit:             1
+CESM Field:       ICE_ICLD_VISTAU (3D) or TAUIMODIS (COSP, CLIMODIS-weighted)
+Match:            APPROX + DERIVED
+
+MMPPE Variable:   cllvi
+Description:      Vertically integrated cloud water
+Unit:             kg m-2
+CESM Field:       TGCLDLWP
+Match:            EXACT
+
+MMPPE Variable:   clivi
+Description:      Vertically integrated cloud ice
+Unit:             kg m-2
+CESM Field:       TGCLDIWP
+Match:            EXACT
+
+MMPPE Variable:   pr
+Description:      Precipitation flux
+Unit:             kg m-2 s-1
+CESM Field:       PRECT
+Match:            CLOSE
+Notes:            PRECT is a liquid-water-equivalent RATE in m/s; multiply by
+                  the density of water (1000 kg/m3) to get kg m-2 s-1.
+
+MMPPE Variable:   PM1
+Description:      Surface PM1 mass concentration
+Unit:             kg m-3
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            Only a 2.5 um cutoff (PM25/PM25_SRF) is implemented (in
+                  modal_aero_wateruptake.F90); no 1 um cutoff exists. The
+                  PM25 calculation is the pattern to adapt if this is needed.
+
+MMPPE Variable:   PM2.5
+Description:      Surface PM2.5 mass concentration
+Unit:             kg m-3
+CESM Field:       PM25_SRF
+Match:            EXACT
+
+MMPPE Variable:   PM10
+Description:      Surface PM10 mass concentration
+Unit:             kg m-3
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            Same as PM1 -- no 10 um cutoff implemented; adapt the PM25
+                  pattern in modal_aero_wateruptake.F90.
+
+MMPPE Variable:   BC
+Description:      Surface BC mass concentration
+Unit:             kg m-3
+CESM Field:       derive from bc_a1 + bc_a4 (kg/kg -> x air density, surface
+                  level)
+Match:            DERIVED
+
+MMPPE Variable:   rsdt
+Description:      TOA incident shortwave radiation
+Unit:             W m-2
+CESM Field:       SOLIN
+Match:            EXACT
+
+MMPPE Variable:   rsut
+Description:      TOA outgoing shortwave radiation
+Unit:             W m-2
+CESM Field:       FSUTOA
+Match:            EXACT
+
+MMPPE Variable:   rsutcs
+Description:      TOA outgoing clear-sky shortwave radiation
+Unit:             W m-2
+CESM Field:       FSUTOAC
+Match:            EXACT
+Notes:            A new FSUTOAC field was added to src/physics/rrtmg/
+                  radiation.F90 (see ppe_changes_incorporated.txt section
+                  7d), adapted from E3SM commit 7b12c318 -- computed as
+                  SOLIN - FSNTOAC (same formula as the old derive-yourself
+                  recipe, now done natively). Note: the E3SM reference
+                  commit has a bug where it outputs FSUTOAC as a duplicate
+                  of FSNTOAC (the net flux) instead of the true upwelling
+                  value; not replicated here. Not on by default (deviates
+                  from the E3SM reference, which did default it, to match
+                  this branch's fincl-based convention); add via fincl. Not
+                  yet validated against real model output.
+
+MMPPE Variable:   rlut
+Description:      TOA outgoing longwave radiation
+Unit:             W m-2
+CESM Field:       FLUT
+Match:            EXACT
+
+MMPPE Variable:   rlutcs
+Description:      TOA outgoing clear-sky longwave radiation
+Unit:             W m-2
+CESM Field:       FLUTC
+Match:            EXACT
+
+MMPPE Variable:   rsut_na
+Description:      TOA outgoing shortwave radiation (aerosol-free)
+Unit:             W m-2
+CESM Field:       FSUTOA_d1  (or _d2..._d10, whichever diagnostic slot is
+                  configured for an aerosol-free constituent list)
+Match:            DERIVED + CONFIG-DEPENDENT
+Notes:            CAM has a built-in "diagnostic radiation call" mechanism
+                  (rad_diag_1..rad_diag_10 namelist entries in
+                  rad_constituents.F90) that re-runs the radiation code with
+                  an alternate constituent list and appends a "_d1".."_d10"
+                  suffix to every radiation output field (see
+                  src/physics/rrtmg/radiation.F90, the `diag(0:N_DIAG)`
+                  array). This is exactly the "double-call to radiation"
+                  the protocol's Remark column mentions. To get these 4
+                  aerosol-free fields, configure one rad_diag_N slot's
+                  constituent list to exclude all aerosol species, and read
+                  back FSUTOA_dN/FLUT_dN/etc. Not automatically populated by
+                  default -- requires explicit namelist configuration.
+
+MMPPE Variable:   rsutcs_na
+Description:      TOA outgoing clear-sky shortwave radiation (aerosol-free)
+Unit:             W m-2
+CESM Field:       FSUTOAC_dN (same diagnostic slot as rsut_na; new field,
+                  addfld'd for every icall so the '_d1'..'_d10' diagnostic
+                  variants exist same as FSNTOAC_dN)
+Match:            CONFIG-DEPENDENT
+Notes:            Same FSUTOAC field as rsutcs above (see that entry and
+                  ppe_changes_incorporated.txt section 7d), computed for
+                  every active diagnostic radiation call, not just icall==0.
+                  Still requires a rad_diag_N slot configured for an
+                  aerosol-free constituent list, same as rsut_na. Not on by
+                  default; add via fincl. Not yet validated against real
+                  model output.
+
+MMPPE Variable:   rlut_na
+Description:      TOA outgoing longwave radiation (aerosol-free)
+Unit:             W m-2
+CESM Field:       FLUT_dN
+Match:            CONFIG-DEPENDENT
+
+MMPPE Variable:   rlutcs_na
+Description:      TOA outgoing clear-sky longwave radiation (aerosol-free)
+Unit:             W m-2
+CESM Field:       FLUTC_dN
+Match:            CONFIG-DEPENDENT
+
+MMPPE Variable:   LTS
+Description:      Lower tropospheric stability
+Unit:             K
+CESM Field:       derive from T (700 hPa) and TS/lowest-level T
+Match:            NONE-BEST
+Notes:            LTS is not a native CAM output field anywhere in this
+                  codebase. Standard definition: LTS = theta_700hPa -
+                  theta_surface, computed offline from 3D T and surface
+                  T/PS -- a purely offline post-processing quantity, not
+                  something to add as a new addfld().
+
+MMPPE Variable:   wbase
+Description:      Updraft velocity at cloud base for activation
+Unit:             m s-1
+CESM Field:       WSUB
+Match:            APPROX
+Notes:            WSUB ("Diagnostic sub-grid vertical velocity", 3D, used as
+                  the activation updraft input in microp_aero.F90/ndrop.F90)
+                  is the general vertical-velocity diagnostic feeding
+                  activation, but is not specifically evaluated/output at
+                  cloud base -- would need extracting WSUB at the cloud-base
+                  level in post-processing.
+
+MMPPE Variable:   CTH
+Description:      Liquid cloud top altitude
+Unit:             m
+CESM Field:       CLDHGT (km -> convert to m)
+Match:            APPROX
+Notes:            CLDHGT ("cloud top height") is not explicitly restricted
+                  to liquid-topped clouds. Alternative: derive from PCLDTOP
+                  (pressure of cloud top, Pa) via hydrostatic conversion
+                  using the local T/PS profile.
+
+MMPPE Variable:   CBH
+Description:      Liquid cloud base altitude
+Unit:             m
+CESM Field:       derive from PCLDBOT (Pa) via hydrostatic conversion
+Match:            NONE-BEST
+Notes:            No height-based cloud-base field exists at all -- only
+                  PCLDBOT ("Pressure of cloud base", Pa). Would need the same
+                  hydrostatic pressure-to-height conversion proposed for CTH.
+
+Note from MMPPE.md itself: "For the Fortran code used to diagnose cloud-top
+properties by phase, see the 'Cloud-top calculation' section of the
+aci-baseline experiment documentation" -- that companion document (not
+present in this repo) may already define a preferred recipe for CTH/CBH/CTT
+that supersedes the proxies above; worth checking before implementing any of
+them from scratch.
+
+================================================================================
+SECTION 3: 6-hourly Instantaneous (optional) -- 2D (lat, lon)
+================================================================================
+All modis_* entries below require COSP enabled (-cosp in configure) with the
+MODIS simulator sub-package on. Verified against
+src/physics/cam/cospsimulator_intr.F90 (not MasterFieldList.txt, which has no
+MODIS output at all -- see caveat at top of file).
+
+MMPPE Variable:   modis_cloud_fraction_total
+CESM Field:       CLTMODIS  ("MODIS Total Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_cloud_fraction_water
+CESM Field:       CLWMODIS  ("MODIS Liquid Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_cloud_fraction_ice
+CESM Field:       CLIMODIS  ("MODIS Ice Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_cloud_fraction_low
+CESM Field:       CLLMODIS  ("MODIS Low Level Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_cloud_fraction_mid
+CESM Field:       CLMMODIS  ("MODIS Mid Level Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_cloud_fraction_high
+CESM Field:       CLHMODIS  ("MODIS High Level Cloud Fraction", %)
+Match:            EXACT (requires COSP)
+
+MMPPE Variable:   modis_optical_thickness_total
+CESM Field:       TAUTMODIS
+Match:            CLOSE (requires COSP)
+Notes:            long_name is "MODIS Total Cloud Optical Thickness*
+                  CLTMODIS" -- this field is cloud-fraction-WEIGHTED, not the
+                  true in-cloud mean. Divide by (CLTMODIS/100) to recover the
+                  conditional mean if that's what the protocol wants.
+
+MMPPE Variable:   modis_optical_thickness_water
+CESM Field:       TAUWMODIS
+Match:            CLOSE (requires COSP; weighted by CLWMODIS, same caveat)
+
+MMPPE Variable:   modis_optical_thickness_ice
+CESM Field:       TAUIMODIS
+Match:            CLOSE (requires COSP; weighted by CLIMODIS, same caveat)
+
+MMPPE Variable:   modis_cloud_particle_size_water
+CESM Field:       REFFCLWMODIS
+Match:            CLOSE (requires COSP)
+Notes:            addfld unit is 'm', not micron as the protocol wants --
+                  needs unit conversion. Also weighted by CLWMODIS (same
+                  caveat as the optical-thickness fields above).
+
+MMPPE Variable:   modis_cloud_particle_size_ice
+CESM Field:       REFFCLIMODIS
+Match:            CLOSE (requires COSP; same unit + weighting caveats)
+
+MMPPE Variable:   modis_liquid_water_path
+CESM Field:       LWPMODIS
+Match:            CLOSE (requires COSP; weighted by CLWMODIS)
+
+MMPPE Variable:   modis_ice_water_path
+CESM Field:       IWPMODIS
+Match:            CLOSE (requires COSP; weighted by CLIMODIS)
+
+MMPPE Variable:   prw
+Description:      Vertically integrated water vapour
+Unit:             kg m-2
+CESM Field:       TMQ
+Match:            EXACT
+
+MMPPE Variable:   hfls
+Description:      Latent heat flux
+Unit:             W m-2
+CESM Field:       LHFLX
+Match:            EXACT
+
+MMPPE Variable:   hfss
+Description:      Sensible heat flux
+Unit:             W m-2
+CESM Field:       SHFLX
+Match:            EXACT
+
+MMPPE Variable:   hdtcbl
+Description:      Height of PBL top
+Unit:             m
+CESM Field:       PBLH
+Match:            EXACT
+
+MMPPE Variable:   CTT
+Description:      Warm (T>268K) cloud top temperature
+Unit:             K
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            No native cloud-top-temperature field exists. The closest
+                  structural analog is the ACTREL/ACTNL/FCTL cloud-top
+                  diagnostic family in micro_mg_cam.F90 (subroutine that
+                  computes cloud-top droplet/ice properties) -- a genuinely
+                  new "cloud-top temperature" output would need to be added
+                  there following the same pattern. Do NOT substitute TREFHT
+                  (2m air temperature) or any surface/lowest-level
+                  temperature field; those are not cloud-top quantities.
+
+MMPPE Variable:   uas
+Description:      Zonal wind in 10m
+Unit:             m s-1
+CESM Field:       U10 (with caveat) or UBOT
+Match:            APPROX
+Notes:            CAM's native U10 field is "10m wind SPEED" (scalar
+                  magnitude, i.e. sqrt(u^2+v^2)), not the zonal (u) vector
+                  component the protocol wants. UBOT ("Lowest model level
+                  zonal wind") is a true vector component but is evaluated
+                  at the lowest model level, not diagnosed at exactly 10m.
+                  Neither is an exact match; UBOT is the better proxy if a
+                  true vector component matters more than the exact height.
+
+MMPPE Variable:   vas
+Description:      Meridional wind in 10m
+Unit:             m s-1
+CESM Field:       VBOT
+Match:            APPROX (same caveat as uas; no meridional analog of U10
+                  exists at all, so VBOT is the only vector-component option)
+
+================================================================================
+SUMMARY
+================================================================================
+Of ~79 variables across both tables:
+  - ~35 have an EXACT or CLOSE native CESM field match
+  - ~16 are DERIVED (computable from existing output via a stated recipe)
+  - ~10 are APPROX (a real but meaningfully different field used as proxy)
+  - ~13 are NONE-BEST (no native field or clean derivation; best-effort
+    proxy/recipe given, but genuinely need new code or an offline recipe not
+    implemented anywhere in this codebase)
+
+  (Updated after adding the CCN7/S=0.3% diagnostic bin to
+  src/physics/cam/ndrop.F90: CCNS_0.300 moved APPROX->EXACT;
+  CCN_BURDEN_0.300 and CCN_BL1_0.300 moved APPROX+DERIVED->DERIVED.)
+  - The entire optional MODIS table (13 vars) additionally requires COSP
+    enabled at build/run time, which is off by default.
+
+Recommend treating this file as a first-pass reference, not a final
+data-request spec -- several NONE-BEST / APPROX entries (CN_BURDEN, N70,
+N100, LTS, CTT, CBH, PM1/PM10, the mode-based AOD split) would need new
+Fortran diagnostic code before they could actually be output, and the
+"aci-baseline" cloud-top-calculation document MMPPE.md references (not in
+this repo) may already specify preferred recipes for several of these.

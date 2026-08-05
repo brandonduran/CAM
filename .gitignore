@@ -18,3 +18,9 @@ buildcppc
 .#*
 \#*#
 *.swp
+
+MasterFieldList.txt
+LHS_example/
+forcing_datasets/
+CLAUDE.md
+PFS_comparison_summary.txt

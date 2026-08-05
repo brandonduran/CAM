@@ -245,6 +245,173 @@ where a similar knob was already added there.
   fixing before relying on that unit test suite.
 
 
+7. MMPPE OAT output-variable diagnostics (see MMPPE-info/OAT_variable_mapping.txt)
+
+  Two reference files were added to MMPPE-info/ (not part of the build):
+  cloud-top-calculation.F90 (pseudocode for the AeroCom/aci-baseline
+  cloud-top diagnostic algorithm that MMPPE.md's "Cloud-top calculation"
+  note points to) and output_aerocom_aie.F90 (a full legacy E3SM module
+  implementing that same algorithm plus many other diagnostics from a
+  different, older AeroCom AIE experiment -- not all of it relevant here).
+  Two concrete changes came out of comparing these against the current
+  codebase:
+
+7a. ndrop.F90: added a 7th CCN supersaturation bin, CCN7 (S=0.3%), to
+  give MMPPE's ccns.3/ccncol.3 (and the equivalent CCNS_0.300/
+  CCN_BURDEN_0.300/CCN_BL1_0.300/CCN_0.300 variables in the other output
+  tables) an exact match -- CAM6's native bins were previously fixed at
+  0.02/0.05/0.1/0.2/0.5/1.0% (CCN1..CCN6) with no 0.3% bin, so these were
+  approximated via CCN4 (0.2%). Appended as CCN7 rather than inserted in
+  sorted order, so CCN1..CCN6 keep their existing supersaturation
+  identities. See the "MMPPE OAT NOTE" comment above ndrop.F90's
+  psat/supersat/ccn_name declarations. Not on by default (same as
+  CCN1/2/4/5/6 -- only CCN3 is); add via fincl to get it in history output.
+
+7b. micro_mg_cam.F90: added overlap-weighted cloud-top diagnostics --
+  ACTREL_OVL, ACTREI_OVL, ACTNL_OVL, ACTNI_OVL, FCTL_OVL, FCTI_OVL --
+  ADDED ALONGSIDE the existing ACTREL/ACTREI/ACTNL/ACTNI/FCTL/FCTI
+  (not replacing them), specifically so the two methods' output can be
+  compared directly. The existing fields stop scanning at the FIRST
+  cloudy level below top_lev; the new _OVL fields instead accumulate
+  contributions from every cloud-top-exposed layer using a
+  maximum-random cloud-overlap assumption, adapted from
+  output_aerocom_aie.F90's cloud_top_aerocom subroutine (itself
+  following cloud-top-calculation.F90) -- the protocol-referenced
+  method, and a materially more correct calculation than the
+  first-cloudy-layer approach when clouds are broken/multi-layered.
+  Uses the same grid-mean (not in-cloud) convention as the existing
+  ACTNL/ACTREL fields: divide by FCTL_OVL/FCTI_OVL to recover true
+  in-cloud cloud-top values. Directly relevant to MMPPE's cdnc_incl_ct/
+  ND_INCL_CT, CDR_CT, and ICR_CT variables (see
+  MMPPE-info/OAT_variable_mapping.txt and
+  MMPPE-info/6hourly_variable_mapping.txt).
+  Scope explicitly deferred (per user decision, not attempted this
+  round):
+    - Porting other output_aerocom_aie.F90 diagnostics that don't map to
+      a current MMPPE.md variable: cloud-top CCN at a fixed
+      supersaturation, cloud-top pressure/temperature (ptop/ttop -- could
+      potentially upgrade CTH from its current APPROX mapping if revisited,
+      by converting a liquid-phase-weighted cloud-top pressure to height),
+      column-integrated autoconversion/accretion (note: MG2 already
+      outputs the 3D rates natively as PRAO/PRCO, so this would be a cheap
+      new vertical-integration addfld, not a port), and the various
+      "before microphysics" (*bf) burden diagnostics.
+    - CBH (cloud-base height, currently NONE-BEST in the mapping files):
+      the reference material only provides a cloud-TOP algorithm; a
+      bottom-up analog was not attempted since it would be an original
+      extrapolation beyond what's actually in the reference code, not a
+      verified port.
+  Not yet validated against real model output -- like the rest of this
+  branch, needs a control run to confirm ACTNL_OVL/FCTL_OVL etc. produce
+  sane values before relying on them (see "No compile/run test" below).
+
+7c. radiation.F90 (rrtmg): added a new ANGSTRM output field (Angstrom
+  exponent, 400nm-700nm), for angstrm550_865 and the equivalent
+  ANG_440nm_670nm/ANG_550nm_865nm variables in the other output tables.
+  A third reference file, MMPPE-info/radiation.F90 (a legacy E3SM
+  radiation driver), was added by the user after finding that
+  output_aerocom_aie.F90's own 'angstrm'/'aerindex'/'aod400'/'aod700'
+  fields were dead code -- addfld'd and pbuf-registered but never
+  actually computed or outfld'd anywhere in that file. MMPPE-info/
+  radiation.F90's do_aerocom_ind3 block (around its line 1365) has the
+  real, working formula: angstrm = (ln(aod400)-ln(aod700)) /
+  (ln(0.700)-ln(0.400)), with aod400/aod700 column sums of per-band
+  aerosol optical depth at RRTMG SW bands idx_sw_diag+1/idx_sw_diag-1.
+
+  Checking this against the current codebase turned up that
+  src/physics/rrtmg/radiation.F90 ALREADY computes the exact per-level
+  inputs needed -- rd%aer_tau400/550/700 (rad_out_t type, populated at
+  the aer_tau550/400/700 assignment right before the rad_rrtmg_sw call)
+  -- but nothing in the standard (non-SPCAM) build path ever summed or
+  output them; the only existing consumer is src/physics/spcam/
+  spcam_drivers.F90 (sum(rd%aer_tau550(i,:)) etc., SPCAM-only). So this
+  was a cheap, low-risk addition: sum the already-computed rd%aer_tau400/
+  aer_tau700 over levels and apply the exact reference formula, no new
+  radiative-transfer computation needed. Changes:
+    - rad_out_t (radiation.F90): added angstrm(pcols) field.
+    - radiation_init: addfld('ANGSTRM', ...), guarded to icall==0 only
+      (not extended to the '_d1'.._d10' diagnostic-radiation-call
+      variants -- matches the reference code's own "only for
+      climatology run" restriction, not this file's usual per-icall
+      pattern used for FSNT/SWCF/etc.).
+    - radiation_tend: computes rd%angstrm right after the aer_tau550/
+      400/700 assignment, icall==0 only, with the same nnite/idxnite
+      night-column fillvalue masking already used elsewhere in this file
+      (e.g. tot_cld_vistau) -- day-only, consistent with AODVIS/AODUV/
+      AODNIR's own day-only convention in modal_aer_opt.F90.
+    - radiation_output_sw: outfld('ANGSTRM', ...), icall==0 only.
+  NOT an exact match to angstrm550_865/ANG_550nm_865nm's requested
+  550-865nm pair -- CAM/RRTMG's SW bands don't bracket 865nm at all (see
+  band-edge math in the mapping-file notes); 400-700nm is the pair the
+  reference implementation actually used and validated in a real AeroCom
+  submission, so it was ported as-is rather than picked to match the
+  MMPPE band pair. AOD400/AOD700 themselves were deliberately NOT
+  exposed as their own history fields (kept as local scalars only) --
+  MMPPE.md doesn't request them, only the Angstrom exponent itself; adding
+  them would be unrequested scope. Not on by default; add via fincl.
+  Like 7a/7b, not yet validated against real model output.
+
+7d. Reviewed E3SM commit 7b12c318 (github.com/E3SM-Project/E3SM), the actual
+  "wiring" commit for output_aerocom_aie.F90 (register/init/tphysbc hooks in
+  physpkg.F90, pbuf plumbing in micro_mg_cam.F90 for fields cloud_top_aerocom
+  reads). Confirmed we deliberately do NOT need any of that infrastructure,
+  since we did not port cloud_top_aerocom itself (see 7b). Two independent,
+  useful pieces came out of it instead:
+
+  - ndrop.F90: added CCN7COL (column-integrated CCN at S=0.3%, #/m2) and
+    CCN7BL (CCN at S=0.3% at 1km above surface, #/m3), giving MMPPE's
+    ccncol.3/CCN_BURDEN_0.300/CCN_BL1_0.300 real model output instead of a
+    "derive it yourself" recipe. Adapted from that commit's ndrop.F90 diff
+    (colccn.3/ccn.3bl: column integration via pdel/gravit/air-density, linear
+    interpolation to exactly 1km AGL) -- but that reference code actually
+    computes these from CCN bin 4 (S=0.2%) mislabeled as "colccn.3"/
+    "ccn.3bl", the same CCN4-as-0.3% approximation already found and fixed
+    via CCN7 (see 7a); this implementation uses the real CCN7 bin instead,
+    so it's an exact-supersaturation match the E3SM original wasn't. Not on
+    by default; add via fincl.
+
+  - radiation.F90 (rrtmg): added FSUTOAC (clear-sky upwelling SW at TOA),
+    upgrading rsutcs/rsutcs_na from DERIVED (SOLIN-FSNTOAC, done offline) to
+    a native field -- still computed as SOLIN-FSNTOAC, just inside the model
+    now (radiation_output_sw, icall==0..N_DIAG like other diag-suffixed
+    fields). Note: the E3SM reference commit has a bug here -- it addfld's
+    FSUTOAC as "Clearsky upwelling solar flux" but outfld's it with fsntoac
+    (the NET clear-sky flux, i.e. a duplicate of FSNTOAC under a different
+    name), not the actual upwelling value. Not replicated; implemented
+    correctly as SOLIN-FSNTOAC. Unlike the E3SM version (which added it to
+    history_amwg's add_default list), this one is NOT on by default, to
+    match this branch's own convention of new fields being opt-in via
+    fincl rather than silently changing default output.
+
+  Explicitly not ported from that commit (confirmed still out of scope,
+  matching the 7b deferral list): the do_aerocom_ind3-gated module/physpkg.F90
+  hook structure itself, and micro_mg_cam.F90's before-microphysics
+  (cldliqbf/cldicebf/numliqbf/numicebf) and autoconv/accretn (autocl/accretl,
+  fed from prco_grid/prao_grid -- note this confirms PRCO=autoconversion,
+  PRAO=accretion, correcting a documented CAM5.3 naming bug, useful to know
+  if that deferred item is revisited) pbuf wiring -- these exist only to
+  feed cloud_top_aerocom, which we did not port.
+  Like 7a-7c, not yet validated against real model output.
+
+7e. radiation.F90 (rrtmg): added a second Angstrom exponent field,
+  ANGSTRM_550_865, alongside (not replacing) the 400-700nm ANGSTRM added
+  in 7c -- a closer wavelength match to angstrm550_865/ANG_550nm_865nm.
+  RRTMG's 14 SW bands (radconstants.F90) have no boundary at 865nm; this
+  uses band 10 (441-625nm, idx_sw_diag -- the same band AODVIS already
+  uses for "550nm") and band 8 (778-1242nm, idx_sw_diag-2) for "865nm".
+  Band 8 was chosen over band 9 (625-778nm, idx_sw_diag-1, the next band
+  down and the band the 400-700nm ANGSTRM's "700nm" side already uses)
+  because 865nm falls entirely outside band 9's range but inside band 8's,
+  and band 8's log-wavelength center (sqrt(778*1242)=983nm) is roughly
+  twice as close to 865nm in log-space as band 9's center
+  (sqrt(625*778)=697nm) is. Same rad_out_t/radiation_init/radiation_tend/
+  radiation_output_sw structure as ANGSTRM, same icall==0-only and
+  day-only (fillvalue at night) convention, same choice to keep AOD550/
+  AOD865 as local scalars rather than their own history fields (matching
+  the AOD400/AOD700 scope decision in 7c). Not on by default; add via
+  fincl. Like 7a-7d, not yet validated against real model output.
+
+
 Not yet done
 ------------------------------------------------------------
 - ppe-histogram-bins branch and clean-CAM branch both need pushing to
@@ -256,3 +423,5 @@ Not yet done
   production PPE.
 - rad_bc_ni, rad_oc_ni, emi_cmr_ff, emi_cmr_bb (4 of the 21 MMPPE
   mandatory parameters) remain unimplemented -- see 6c above.
+- See section 7 above for MMPPE output-diagnostic items explicitly
+  deferred this round (broader output_aerocom_aie.F90 port, CBH).

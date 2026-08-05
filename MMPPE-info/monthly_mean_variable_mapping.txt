@@ -1,0 +1,590 @@
+================================================================================
+MMPPE MONTHLY MEAN OUTPUT -- MAPPING TO CESM/CAM6 (MG2/MAM4) FIELDS
+================================================================================
+Source protocol: MMPPE-info/MMPPE.md, "Model Output Variables" -> "Monthly
+Mean". Companion to 6hourly_variable_mapping.txt -- read that file's header
+first for the match-key legend and general caveats (MasterFieldList.txt has
+no COSP/MODIS fields, etc.); not repeated in full here.
+
+MMPPE.md says the monthly-mean stream should carry "All 6h outputs ... except
+for cosp" PLUS the additional variables listed below. So:
+
+  - Every variable in 6hourly_variable_mapping.txt SECTION 1 (3D) and
+    SECTION 2 (2D main table) applies here too, at monthly-mean frequency
+    instead of 6-hourly instantaneous. Not re-listed below except where the
+    SAME NAME reappears in the monthly table with a DIFFERENT MEANING (see
+    "NAME COLLISION" notes) or a materially different match.
+  - SECTION 3 (the "(optional)" MODIS table) is explicitly EXCLUDED from
+    monthly mean per MMPPE.md's own remark ("except for cosp").
+  - Everything below is either new to the monthly list, or flagged because
+    it collides with a 6-hourly name but means something different here.
+
+================================================================================
+SECTION 1: Monthly Mean -- 3D (lev, lat, lon), new variables
+================================================================================
+
+MMPPE Variable:   zg
+Description:      Geometric height at full level center (constant over time)
+Unit:             m
+CESM Field:       Z3
+Match:            EXACT
+Notes:            "Geopotential Height (above sea level)" -- effectively
+                  geometric height for CAM's purposes.
+
+MMPPE Variable:   dzhalf
+Description:      Layer thickness of model levels (constant over time)
+Unit:             m
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            No interface-height (ZI) or pressure-thickness (PDEL)
+                  field is present in this field list. Derive either from
+                  adjacent-level differences of Z3, or hydrostatically from
+                  PMID/T and the model's hybrid-sigma coefficients (hyai/
+                  hybi, stored in the file header, not a history field).
+
+MMPPE Variable:   hur
+Description:      Relative humidity
+Unit:             %
+CESM Field:       RELHUM
+Match:            EXACT
+
+MMPPE Variable:   hus
+Description:      Specific humidity
+Unit:             kg kg-1
+CESM Field:       Q
+Match:            EXACT
+
+MMPPE Variable:   cl
+Description:      Cloud area fraction
+Unit:             m2 m-2
+CESM Field:       CLOUD
+Match:            EXACT
+
+MMPPE Variable:   cli
+Description:      Specific cloud ice content
+Unit:             kg kg-1
+CESM Field:       CLDICE
+Match:            EXACT
+
+MMPPE Variable:   clw
+Description:      Specific cloud water content
+Unit:             kg kg-1
+CESM Field:       CLDLIQ
+Match:            EXACT
+
+MMPPE Variable:   wap
+Description:      Vertical velocity (pressure coordinate)
+Unit:             Pa s-1
+CESM Field:       OMEGA
+Match:            EXACT
+
+MMPPE Variable:   ta
+Description:      Air temperature
+Unit:             K
+CESM Field:       T
+Match:            EXACT
+
+MMPPE Variable:   rho
+Description:      Air density
+Unit:             kg m-3
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            CAM does not output air density directly. Derive from the
+                  ideal gas law using existing output: rho = PMID /
+                  (Rd * Tv), where Tv = T*(1 + 0.608*Q) is virtual
+                  temperature and Rd = 287.05 J/(kg K).
+
+MMPPE Variable:   pfull
+Description:      Air pressure (full/mid levels)
+Unit:             Pa
+CESM Field:       PMID
+Match:            EXACT
+
+MMPPE Variable:   CCN_0.100
+Description:      Cloud condensation nuclei at S=0.1% (3D profile)
+Unit:             m-3
+CESM Field:       CCN3
+Match:            EXACT
+Notes:            Units differ (CCN3 is #/cm3) -- straightforward x1e6
+                  conversion to #/m3. Better match than the 6-hourly table's
+                  CCNS_0.100 since this is requested as a full 3D profile,
+                  which is exactly what CCN3 natively is (no surface
+                  extraction needed).
+
+MMPPE Variable:   CCN_0.300
+Description:      Cloud condensation nuclei at S=0.3% (3D profile)
+Unit:             m-3
+CESM Field:       CCN7
+Match:            EXACT
+Notes:            A 7th CCN bin, CCN7 (S=0.3%), was added to
+                  src/physics/cam/ndrop.F90 to give this an exact match --
+                  see the "MMPPE OAT NOTE" comment above its
+                  psat/supersat/ccn_name declarations. Units differ (CCN7 is
+                  #/cm3) -- straightforward x1e6 conversion to #/m3, same as
+                  CCN_0.100 above. CCN7 is not on by default (same as
+                  CCN1/2/4/5/6 -- only CCN3 is); add it via fincl.
+                  Previously mapped to CCN4 (S=0.2%, APPROX) before CCN7
+                  existed.
+
+MMPPE Variable:   DMS
+Description:      DMS mass mixing ratio
+Unit:             kg kg-1
+CESM Field:       DMS
+Match:            CLOSE
+Notes:            CAM's native DMS tracer output is in mol/mol (volume
+                  mixing ratio), not kg/kg (mass mixing ratio) -- needs
+                  x(M_DMS/M_air) conversion (M_DMS ~ 62.13 g/mol).
+
+MMPPE Variable:   SO2
+Description:      SO2 mass mixing ratio
+Unit:             kg kg-1
+CESM Field:       SO2
+Match:            CLOSE
+Notes:            Same mol/mol -> kg/kg conversion caveat as DMS
+                  (M_SO2 ~ 64.07 g/mol).
+
+MMPPE Variable:   SO4  [NAME COLLISION with 6-hourly table's "SO4"]
+Description:      SO4 mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: so4_a1 + so4_a2 + so4_a3
+Match:            DERIVED
+Notes:            NOT the same quantity as the 6-hourly table's "SO4"
+                  (surface mass CONCENTRATION, kg/m3) -- this is a 3D mass
+                  MIXING RATIO (kg/kg). MAM4 keeps SO4 split across 3 modes
+                  with no pre-summed total tracer; sum the three kg/kg
+                  fields directly (no density conversion needed, unlike the
+                  6-hourly surface-concentration version).
+
+MMPPE Variable:   BC  [NAME COLLISION with 6-hourly table's "BC"]
+Description:      BC mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: bc_a1 + bc_a4
+Match:            DERIVED
+Notes:            Same collision caveat as SO4 above -- this is a 3D mixing
+                  ratio, not the 6-hourly table's surface concentration.
+
+MMPPE Variable:   OC
+Description:      OC mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: pom_a1 + pom_a4
+Match:            DERIVED
+Notes:            Sums only PRIMARY organic matter (POM), matching how
+                  burden_oc/BURDENPOM was mapped in the 6-hourly table.
+                  Secondary organic aerosol (soa1_a1, soa1_a2, soa2_a1,
+                  soa2_a2, ... -- CAM's SOA species) is tracked completely
+                  separately and is NOT included here; add it in if the
+                  protocol's "OC" is meant to be total organic carbon
+                  (primary + secondary) rather than primary-only.
+
+MMPPE Variable:   DU
+Description:      Dust mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: dst_a1 + dst_a2 + dst_a3
+Match:            DERIVED
+
+MMPPE Variable:   SS
+Description:      Seasalt mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: ncl_a1 + ncl_a2 + ncl_a3
+Match:            DERIVED
+
+MMPPE Variable:   WAT
+Description:      Aerosol water mass mixing ratio (3D profile)
+Unit:             kg kg-1
+CESM Field:       derive: wat_a1 + wat_a2 + wat_a3 + wat_a4
+Match:            DERIVED
+Notes:            Per the addfld() long_name these are output with unit 'm',
+                  not kg/kg -- double check whether that's a units-string
+                  bug or these fields represent something other than a
+                  mixing ratio (e.g. an equivalent water film thickness)
+                  before using them directly; may need a different
+                  derivation than the other mixing-ratio sums above.
+
+MMPPE Variable:   CDNC
+Description:      Cloud droplet number mixing ratio
+Unit:             kg-1
+CESM Field:       NUMLIQ
+Match:            EXACT
+Notes:            Native unit is 1/kg, i.e. kg-1 -- units already match.
+
+MMPPE Variable:   ICNC
+Description:      Ice crystal number mixing ratio
+Unit:             kg-1
+CESM Field:       NUMICE
+Match:            EXACT
+
+================================================================================
+SECTION 2: Monthly Mean -- 2D (lat, lon), new variables
+================================================================================
+
+MMPPE Variable:   lsm
+Description:      Land-sea mask
+Unit:             1
+CESM Field:       LANDFRAC
+Match:            CLOSE
+Notes:            LANDFRAC is fractional land coverage (0-1), not a strict
+                  binary land/sea mask, but is the standard CESM field used
+                  for this purpose.
+
+MMPPE Variable:   rsdt, rsut, rsutcs, rlut, rlutcs, rsut_na, rsutcs_na,
+                  rlut_na, rlutcs_na
+Match:            Same as 6-hourly table (SOLIN, FSUTOA, derived
+                  SOLIN-FSNTOAC, FLUT, FLUTC, and the _dN diagnostic-radiation
+                  variants) -- see 6hourly_variable_mapping.txt SECTION 2.
+                  No change at monthly frequency.
+
+MMPPE Variable:   albedo
+Description:      Surface albedo
+Unit:             1
+CESM Field:       derive: FSUTOA / SOLIN  (TOA planetary albedo), or
+                  ASDIR/ASDIF (surface visible direct/diffuse albedo)
+Match:            NONE-BEST
+Notes:            No single "albedo" field exists. Two different quantities
+                  are plausible depending on what "surface albedo" is meant
+                  to mean here: (1) true SURFACE albedo -- CAM outputs
+                  band/angle-resolved components (ASDIR/ASDIF for visible
+                  shortwave direct/diffuse; despite their MasterFieldList
+                  descriptions saying "longwave," ALDIR/ALDIF are actually
+                  CAM's near-infrared albedo components, not a longwave
+                  albedo -- there is no such thing as broadband surface
+                  albedo as one field); (2) TOA PLANETARY albedo, which is
+                  not surface-based at all but is a common AeroCom-style
+                  proxy, computed as FSUTOA/SOLIN. Recommend clarifying
+                  which one the protocol wants before implementing either.
+
+MMPPE Variable:   ptp
+Description:      Tropopause air pressure
+Unit:             Pa
+CESM Field:       TROP_P
+Match:            EXACT
+Notes:            TROPP_P ("Tropopause Pressure (primary)") also exists;
+                  confirm which of the two tropopause-diagnosis methods
+                  the protocol intends if they can diverge.
+
+MMPPE Variable:   ps
+Description:      Surface air pressure
+Unit:             Pa
+CESM Field:       PS
+Match:            EXACT
+
+MMPPE Variable:   psl
+Description:      Mean sea level pressure
+Unit:             Pa
+CESM Field:       PSL
+Match:            EXACT
+
+MMPPE Variable:   dew2
+Description:      Dew point temperature in 2m
+Unit:             K
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            Not a native CAM output. Derive from 2m specific/relative
+                  humidity and TREFHT/PS via a standard dewpoint formula
+                  (e.g. Magnus/Bolton) in post-processing.
+
+MMPPE Variable:   prcr
+Description:      Convective precipitation flux (water)
+Unit:             kg m-2 s-1
+CESM Field:       PRECC
+Match:            CLOSE
+Notes:            PRECC is "Convective precipitation rate (liq+ice)" in m/s
+                  (water-equivalent); x1000 (density of water) for
+                  kg m-2 s-1. Note this is liq+ice combined, not
+                  water-only -- see prcs below re: separating the snow
+                  fraction.
+
+MMPPE Variable:   prcs
+Description:      Convective precipitation flux (snow)
+Unit:             kg m-2 s-1
+CESM Field:       PRECSC
+Match:            CLOSE
+Notes:            "Convective snow rate (water equivalent)", m/s -> x1000
+                  for kg m-2 s-1. To get prcr as water-ONLY (excluding
+                  snow), subtract PRECSC from PRECC.
+
+MMPPE Variable:   prlr
+Description:      Large-scale precipitation flux (water)
+Unit:             kg m-2 s-1
+CESM Field:       PRECL
+Match:            CLOSE
+Notes:            "Large-scale (stable) precipitation rate (liq+ice)", same
+                  unit conversion and liq+ice caveat as prcr.
+
+MMPPE Variable:   prls
+Description:      Large-scale precipitation flux (snow)
+Unit:             kg m-2 s-1
+CESM Field:       PRECSL
+Match:            CLOSE
+Notes:            Same unit conversion as prcs.
+
+MMPPE Variable:   ts
+Description:      Surface temperature
+Unit:             K
+CESM Field:       TS
+Match:            EXACT
+Notes:            CAM's long_name is "Surface temperature (radiative)".
+
+MMPPE Variable:   tas
+Description:      Temperature in 2m
+Unit:             K
+CESM Field:       TREFHT
+Match:            EXACT
+Notes:            "Reference height temperature", CAM's standard 2m proxy.
+
+MMPPE Variable:   burden_dms
+Description:      Atmospheric burden of DMS
+Unit:             kg m-2
+CESM Field:       TMDMS
+Match:            EXACT
+Notes:            "DMS column burden" -- unlike the aerosol species, this
+                  IS a directly named field (auto-generated tracer-burden
+                  diagnostic, same TM<name> family used for
+                  burden_icnc/burden_cdnc in the 6-hourly table, but here a
+                  genuine 1:1 name match).
+
+MMPPE Variable:   burden_so2
+Description:      Atmospheric burden of SO2
+Unit:             kg m-2
+CESM Field:       TMSO2
+Match:            EXACT
+Notes:            "SO2 column burden", same TM<name> family.
+
+MMPPE Variable:   burden_bc, burden_du, burden_oc, burden_so4, burden_ss,
+                  burden_wat
+Match:            Same as 6-hourly table (BURDENBC, BURDENDUST, BURDENPOM,
+                  BURDENSO4, BURDENSEASALT, derived wat_a1..a4 sum) -- see
+                  6hourly_variable_mapping.txt SECTION 2.
+
+MMPPE Variable:   CT_TIME
+Description:      Cloud top occurrence time fraction
+Unit:             1
+CESM Field:       derive: FCTL + FCTI + FCTM
+Match:            APPROX + DERIVED
+Notes:            No single "any cloud top occurred" field exists, only the
+                  phase-specific occurrence fractions from micro_mg_cam.F90:
+                  FCTL (liquid), FCTI (ice), FCTM (mixed-phase). Summing all
+                  three approximates total cloud-top occurrence frequency,
+                  though double-counting at phase boundaries is possible
+                  depending on how the three are defined internally --
+                  check micro_mg_cam.F90 before trusting the sum. MMPPE.md's
+                  own remark ("for custom stream") suggests this may need a
+                  bespoke accumulator rather than reuse of an existing
+                  monthly-mean field regardless.
+
+MMPPE Variable:   emi_dms
+Description:      Accumulated emission mass flux of DMS
+Unit:             kg m-2 s-1
+CESM Field:       SFDMS
+Match:            EXACT
+Notes:            "DMS surface flux" -- this is the TOTAL flux (all
+                  contributing source files combined); see general emission
+                  caveat below.
+
+MMPPE Variable:   emi_so2
+Description:      Accumulated emission mass flux of SO2
+Unit:             kg m-2 s-1
+CESM Field:       SFSO2
+Match:            CLOSE
+Notes:            SFSO2 is surface-emitted SO2 only. If volcanic/aircraft
+                  (elevated) SO2 sources should count toward "total SO2
+                  emission," also consider SO2_CLXF (vertically integrated
+                  elevated forcing, molec/cm2/s -- different units, would
+                  need molar-mass conversion to combine with SFSO2).
+
+MMPPE Variable:   emi_so4
+Description:      Accumulated emission mass flux of SO4
+Unit:             kg m-2 s-1
+CESM Field:       derive: SFso4_a1 + SFso4_a2
+Match:            DERIVED
+
+MMPPE Variable:   emi_bc
+Description:      Accumulated emission mass flux of BC
+Unit:             kg m-2 s-1
+CESM Field:       SFbc_a4
+Match:            EXACT (as a total; see general emission caveat below)
+
+MMPPE Variable:   emi_oc
+Description:      Accumulated emission mass flux of OC
+Unit:             kg m-2 s-1
+CESM Field:       SFpom_a4
+Match:            EXACT (as a total; see general emission caveat below)
+
+MMPPE Variable:   emi_du
+Description:      Accumulated emission mass flux of dust
+Unit:             kg m-2 s-1
+CESM Field:       derive: SFdst_a1 + SFdst_a2 + SFdst_a3
+Match:            DERIVED
+
+MMPPE Variable:   emi_ss
+Description:      Accumulated emission mass flux of seasalt
+Unit:             kg m-2 s-1
+CESM Field:       derive: SFncl_a1 + SFncl_a2 + SFncl_a3
+Match:            DERIVED
+
+MMPPE Variable:   emi_bb_so2, emi_bb_bc, emi_bb_oc
+Description:      Accumulated emission mass flux of SO2/BC/OC due to fire
+                  (biomass burning only)
+Unit:             kg m-2 s-1
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            *** No native field isolates the biomass-burning-only
+                  component. *** SFSO2/SFbc_a4/SFpom_a4 (above) are TOTALS
+                  -- mo_srf_emissions.F90 sums every matching-species
+                  emission-file entry (anthro + bb + any others) into one
+                  flux BEFORE it reaches the history-output diagnostic (see
+                  set_srf_emissions, flux(:ncol) = flux(:ncol) +
+                  emissions(m)%scalefactor*...). This is directly relevant
+                  to the srf_emis_scale_so2_bb/bc_bb/oc_bb PPE knobs added
+                  this branch (see ppe_changes_incorporated.txt section 6b)
+                  -- those scale the BB-tagged input files specifically, but
+                  there is currently no matching *output* diagnostic that
+                  reports the bb-only flux separately. Getting this would
+                  need either (a) new code splitting the SF<species> outfld
+                  call by source category in mo_srf_emissions.F90, or (b) a
+                  sensitivity-run approach (diff a run with bb scale=0
+                  against the control).
+
+MMPPE Variable:   ANG_550nm_865nm
+Description:      Angstroem parameter 550nm-865nm
+Unit:             1
+CESM Field:       ANGSTRM_550_865
+Match:            CLOSE
+Notes:            A new field, ANGSTRM_550_865, was added to
+                  src/physics/rrtmg/radiation.F90 (see
+                  ppe_changes_incorporated.txt section 7e), alongside (not
+                  replacing) the earlier 400-700nm ANGSTRM field (ported
+                  as-is from MMPPE-info/radiation.F90's E3SM formula, see
+                  7c). ANGSTRM_550_865 uses RRTMG SW band 10 (441-625nm,
+                  idx_sw_diag -- the same band AODVIS uses) for "550nm" and
+                  band 8 (778-1242nm, idx_sw_diag-2) for "865nm", chosen
+                  over band 9 (625-778nm, idx_sw_diag-1) because 865nm
+                  falls outside band 9's range but inside band 8's, and
+                  band 8's log-wavelength center (~983nm) is roughly twice
+                  as close to 865nm in log-space as band 9's (~697nm) --
+                  see the radiation_tend code comments for the full
+                  derivation. Not a bit-exact 550.0/865.0nm pair (RRTMG has
+                  no band boundary there), but a real, purpose-chosen
+                  native field rather than a ported or offline-derived
+                  approximation. Day-only and not on by default; add via
+                  fincl. The 400-700nm ANGSTRM and the AODVIS(550)/
+                  AODNIR(1020)-derived fallback recipe both remain
+                  available too. Not yet validated against real model
+                  output.
+
+MMPPE Variable:   ABS_COMP_BC_550nm
+Description:      Absorption optical thickness BC @550nm
+Unit:             1
+CESM Field:       AODABSBC
+Match:            EXACT (day only; AODABSBCdn for day+night)
+
+MMPPE Variable:   ABS_COMP_OC_550nm, ABS_COMP_SO4_550nm, ABS_COMP_DU_550nm,
+                  ABS_COMP_SS_550nm, ABS_COMP_WAT_550nm
+Description:      Absorption optical thickness by species @550nm
+Unit:             1
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            CAM only decomposes absorption OD by species for BC
+                  (AODABSBC) -- there is no AODABSDUST/AODABSSO4/AODABSSS/
+                  AODABSPOM/AODABSWAT equivalent. This is physically
+                  plausible (BC dominates absorption; the others are mostly
+                  scattering in this optics scheme) but means these 5
+                  variables have no native output and would need new
+                  per-species absorption bookkeeping added to
+                  modal_aer_opt.F90 (which already computes per-species
+                  scatdust/absdust/scatso4/absso4/etc. as LOCAL diagnostic
+                  variables for the AODDUST/AODSO4/etc. fields -- the
+                  absorption halves of those same local variables are
+                  computed but never written to history except for BC).
+
+MMPPE Variable:   TAU_COMP_BC_550nm
+Description:      Optical thickness BC @550nm
+Unit:             1
+CESM Field:       AODBC
+Match:            EXACT (day only; AODBCdn for day+night)
+
+MMPPE Variable:   TAU_COMP_OC_550nm
+Description:      Optical thickness OC @550nm
+Unit:             1
+CESM Field:       AODPOM
+Match:            EXACT (day only; AODPOMdn for day+night)
+
+MMPPE Variable:   TAU_COMP_SO4_550nm
+Description:      Optical thickness SO4 @550nm
+Unit:             1
+CESM Field:       AODSO4
+Match:            EXACT (day only; AODSO4dn for day+night)
+
+MMPPE Variable:   TAU_COMP_DU_550nm
+Description:      Optical thickness dust @550nm
+Unit:             1
+CESM Field:       AODDUST
+Match:            EXACT (day only; AODDUSTdn for day+night)
+
+MMPPE Variable:   TAU_COMP_SS_550nm
+Description:      Optical thickness seasalt @550nm
+Unit:             1
+CESM Field:       AODSS
+Match:            EXACT (day only; AODSSdn for day+night)
+
+MMPPE Variable:   TAU_COMP_WAT_550nm
+Description:      Optical thickness water @550nm
+Unit:             1
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            No water-specific AOD component field, unlike dust/SO4/
+                  POM/SOA/BC/seasalt which each get AOD<SPECIES>. Aerosol
+                  water's optical effect is folded into each mode's wet-size
+                  Mie calculation (see modal_aer_opt.F90's volume-mixing of
+                  crefwsw into each mode's bulk refractive index) rather
+                  than tracked as its own additive AOD contributor -- would
+                  need new code to isolate.
+
+MMPPE Variable:   TAU_2D_MODE_KS/AS/CS/KI/AI/CI_550nm
+Match:            Same mode-mismatch issue as the 6-hourly table -- see
+                  6hourly_variable_mapping.txt SECTION 2 (AODDUST/AODSO4/
+                  AODPOM/AODBC/AODSS/AODSOA as the nearest per-SPECIES,
+                  not per-mode, alternative).
+
+MMPPE Variable:   ABS_2D_MODE_KS_550nm / _AS_ / _CS_ / _KI_ / _AI_ / _CI_
+Description:      Absorption optical thickness by mode (soluble/insoluble x
+                  Aitken/accumulation/coarse)
+Unit:             1
+CESM Field:       none
+Match:            NONE-BEST
+Notes:            Combines both problems above: MAM4 has no soluble/
+                  insoluble mode split (see TAU_2D_MODE_* note), AND CAM
+                  doesn't decompose absorption OD by mode at all, only by
+                  species and only for BC (AODABSBC). No usable proxy exists
+                  for these 6 variables; would need substantial new code in
+                  modal_aer_opt.F90.
+
+================================================================================
+SUMMARY
+================================================================================
+New variables introduced by the monthly-mean table (i.e. not already covered
+by "all 6h outputs"): ~64. Of those:
+  - ~26 EXACT or CLOSE (mostly the standard dynamics/thermodynamics fields:
+    zg, hur, hus, cl, cli, clw, wap, ta, pfull, CDNC, ICNC, ps, psl, ptp, ts,
+    tas, burden_dms, burden_so2, lsm, CCN_0.300, and the per-species
+    TAU_COMP_* fields)
+  - ~10 DERIVED (mode-summed mixing ratios/emission fluxes: SO4, BC, OC, DU,
+    SS, WAT, emi_so4, emi_du, emi_ss, and unit conversions for DMS/SO2/
+    precip components)
+  - ~1 APPROX + DERIVED (CT_TIME)
+  - ~13 NONE-BEST, most notably:
+      * emi_bb_so2/emi_bb_bc/emi_bb_oc -- no native field separates
+        biomass-burning emissions from the combined total, which is
+        directly relevant to this branch's srf_emis_scale_*_bb PPE knobs
+        (see notes under emi_bb_so2 above and ppe_changes_incorporated.txt
+        section 6b).
+      * dzhalf, rho, dew2, albedo -- standard derivable diagnostics with no
+        native field.
+      * ABS_COMP_OC/SO4/DU/SS/WAT_550nm, TAU_COMP_WAT_550nm, and all 6
+        ABS_2D_MODE_* -- CAM's per-species AOD/absorption decomposition
+        doesn't go as far as the protocol wants (absorption is only broken
+        out for BC; no species gets a water-specific AOD term).
+
+Two collisions worth flagging explicitly: this table's "SO4" and "BC" reuse
+the exact same names as 6-hourly's surface-mass-concentration variables but
+mean 3D mass MIXING RATIOS here -- don't conflate the two when building an
+actual output-variable list/script.

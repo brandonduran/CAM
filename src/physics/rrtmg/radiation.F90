@@ -107,7 +107,22 @@ type rad_out_t
    real(r8) :: aer_tau400(pcols,0:pver)
    real(r8) :: aer_tau550(pcols,0:pver)
    real(r8) :: aer_tau700(pcols,0:pver)
-   
+
+   ! MMPPE: Angstrom exponent between the 400nm and 700nm SW bands (idx_sw_diag+1/-1),
+   ! column-integrated from aer_tau400/aer_tau700 above. Only populated for icall==0
+   ! (the primary climate call), matching MMPPE-info/radiation.F90's do_aerocom_ind3
+   ! block, which this was adapted from -- see radiation_tend/radiation_output_sw.
+   real(r8) :: angstrm(pcols)
+
+   ! MMPPE: Angstrom exponent between the 550nm and ~865nm SW bands (idx_sw_diag/
+   ! idx_sw_diag-2), for angstrm550_865/ANG_550nm_865nm -- a closer wavelength match
+   ! to that protocol variable than the 400-700nm ANGSTRM above (see radiation_tend
+   ! for the band-selection reasoning: RRTMG has no band boundary at 865nm, so this
+   ! uses band 8 (778-1242nm), which actually contains 865nm and is closer to it in
+   ! log-wavelength space than band 9 (625-778nm, the next band down) is). Same
+   ! icall==0-only, day-only convention as ANGSTRM.
+   real(r8) :: angstrm865(pcols)
+
 end type rad_out_t
 
 ! Namelist variables
@@ -458,6 +473,15 @@ subroutine radiation_init(pbuf2d)
                                                                                  sampling_seq='rad_lwsw')
          call addfld('FSUTOA'//diag(icall),   horiz_only,   'A', 'W/m2', 'Upwelling solar flux at top of atmosphere',       &
                                                                                  sampling_seq='rad_lwsw')
+         ! MMPPE: clear-sky counterpart of FSUTOA, giving rsutcs/rsutcs_na an exact
+         ! match instead of the derive-yourself SOLIN-FSNTOAC recipe (still how it's
+         ! computed here, just done natively -- see radiation_output_sw). Adapted
+         ! from E3SM commit 7b12c318, which added this field but (bug) actually
+         ! outfld's it with fsntoac (the NET clear-sky flux) instead of the genuine
+         ! upwelling value its own addfld long_name describes; this implementation
+         ! computes it correctly as SOLIN - FSNTOAC.
+         call addfld('FSUTOAC'//diag(icall),  horiz_only,   'A', 'W/m2', 'Clearsky upwelling solar flux at top of atmosphere', &
+                                                                                 sampling_seq='rad_lwsw')
          call addfld('FSNIRTOA'//diag(icall), horiz_only,   'A', 'W/m2',                                                    &
                                'Net near-infrared flux (Nimbus-7 WFOV) at top of atmosphere', sampling_seq='rad_lwsw')
          call addfld('FSNRTOAC'//diag(icall), horiz_only,   'A', 'W/m2',                                                    &
@@ -495,6 +519,21 @@ subroutine radiation_init(pbuf2d)
          call addfld('FDS'//diag(icall),      (/ 'ilev' /), 'I', 'W/m2', 'Shortwave downward flux')
          call addfld('FUSC'//diag(icall),     (/ 'ilev' /), 'I', 'W/m2', 'Shortwave clear-sky upward flux')
          call addfld('FDSC'//diag(icall),     (/ 'ilev' /), 'I', 'W/m2', 'Shortwave clear-sky downward flux')
+
+         ! MMPPE: Angstrom exponent, 400nm-700nm SW bands, day only. Not extended to the
+         ! diagnostic radiation calls (icall>0) -- see rad_out_t%angstrm comment above.
+         if (icall == 0) then
+            call addfld('ANGSTRM', horiz_only, 'A', '1', &
+                         'Angstrom exponent, 400nm-700nm aerosol optical depth, day only', flag_xyfill=.true.)
+
+            ! MMPPE: Angstrom exponent for angstrm550_865/ANG_550nm_865nm, using RRTMG SW
+            ! band 10 (441-625nm, idx_sw_diag) for 550nm and band 8 (778-1242nm,
+            ! idx_sw_diag-2) for ~865nm -- see rad_out_t%angstrm865 comment above for why
+            ! band 8 rather than band 9 (625-778nm, idx_sw_diag-1).
+            call addfld('ANGSTRM_550_865', horiz_only, 'A', '1', &
+                         'Angstrom exponent between AOD in RRTMG SW bands 10 (441-625nm, ' // &
+                         '~550nm) and 8 (778-1242nm, ~865nm), day only', flag_xyfill=.true.)
+         end if
 
          if (history_amwg) then
             call add_default('SOLIN'//diag(icall),   1, ' ')
@@ -821,6 +860,14 @@ subroutine radiation_tend( &
    real(r8) :: aer_tau_w_f(pcols,0:pver,nswbands) ! aerosol forward scattered fraction * w * tau
    real(r8) :: aer_lw_abs (pcols,pver,nlwbands)   ! aerosol absorption optics depth (LW)
 
+   ! MMPPE: column AOD at the 400nm/700nm SW bands, local work scalars for the
+   ! rd%angstrm computation above (see rad_out_t%angstrm comment)
+   real(r8) :: aod400_ang, aod700_ang
+
+   ! MMPPE: column AOD at the ~550nm/~865nm SW bands, local work scalars for the
+   ! rd%angstrm865 computation below (see rad_out_t%angstrm865 comment)
+   real(r8) :: aod550_ang, aod865_ang
+
    real(r8) :: fns(pcols,pverp)     ! net shortwave flux
    real(r8) :: fcns(pcols,pverp)    ! net clear-sky shortwave flux
    real(r8) :: fnl(pcols,pverp)     ! net longwave flux
@@ -1102,6 +1149,48 @@ subroutine radiation_tend( &
                rd%aer_tau400(:ncol,:)       = aer_tau(:ncol,:,idx_sw_diag+1)
                rd%aer_tau700(:ncol,:)       = aer_tau(:ncol,:,idx_sw_diag-1)
 
+               ! MMPPE: Angstrom exponent (400nm-700nm), adapted from
+               ! MMPPE-info/radiation.F90's do_aerocom_ind3 block (same aod400/aod700
+               ! column sums and formula; only computed for the primary climate call,
+               ! matching that reference's own "only for climatology run" restriction).
+               !
+               ! Also computes a second Angstrom exponent (rd%angstrm865, ~550-865nm) for
+               ! angstrm550_865/ANG_550nm_865nm, using the same formula/masking but a band
+               ! pair chosen for that specific target rather than ported from the reference.
+               ! RRTMG's SW bands (radconstants.F90) have no boundary at 865nm; band 10
+               ! (441-625nm, idx_sw_diag) is used for "550nm" (same band AODVIS uses), and
+               ! band 8 (778-1242nm, idx_sw_diag-2) for "865nm" -- NOT band 9 (625-778nm,
+               ! idx_sw_diag-1, the next band down), because 865nm falls outside band 9's
+               ! range entirely but inside band 8's, and band 8's log-wavelength center
+               ! (sqrt(778*1242) = 983nm) is close to twice as near to 865nm in log-space
+               ! (ln(983/865) = 0.128) as band 9's center (sqrt(625*778) = 697nm) is
+               ! (ln(865/697) = 0.215).
+               if (icall == 0) then
+                  do i = 1, ncol
+                     aod400_ang = sum(rd%aer_tau400(i,:))
+                     aod700_ang = sum(rd%aer_tau700(i,:))
+                     if (aod400_ang < 1.0e4_r8 .and. aod700_ang < 1.0e4_r8 .and. &
+                         aod400_ang > 1.0e-10_r8 .and. aod700_ang > 1.0e-10_r8) then
+                        rd%angstrm(i) = (log(aod400_ang) - log(aod700_ang)) / (log(0.700_r8) - log(0.400_r8))
+                     else
+                        rd%angstrm(i) = fillvalue
+                     end if
+
+                     aod550_ang = sum(rd%aer_tau550(i,:))
+                     aod865_ang = sum(aer_tau(i,:,idx_sw_diag-2))
+                     if (aod550_ang < 1.0e4_r8 .and. aod865_ang < 1.0e4_r8 .and. &
+                         aod550_ang > 1.0e-10_r8 .and. aod865_ang > 1.0e-10_r8) then
+                        rd%angstrm865(i) = (log(aod550_ang) - log(aod865_ang)) / (log(0.865_r8) - log(0.550_r8))
+                     else
+                        rd%angstrm865(i) = fillvalue
+                     end if
+                  end do
+                  do i = 1, nnite
+                     rd%angstrm(idxnite(i))    = fillvalue
+                     rd%angstrm865(idxnite(i)) = fillvalue
+                  end do
+               end if
+
                call rad_rrtmg_sw( &
                   lchnk, ncol, num_rrtmg_levs, r_state, state%pmid,          &
                   cldfprime, aer_tau, aer_tau_w, aer_tau_w_g,  aer_tau_w_f,  &
@@ -1308,6 +1397,9 @@ subroutine radiation_output_sw(lchnk, ncol, icall, rd, pbuf, cam_out)
 
    call outfld('FSUTOA'//diag(icall),   rd%fsutoa,     pcols, lchnk)
 
+   ftem(:ncol) = rd%solin(:ncol) - rd%fsntoac(:ncol)
+   call outfld('FSUTOAC'//diag(icall),  ftem,          pcols, lchnk)
+
    call outfld('FSNIRTOA'//diag(icall), rd%fsnirt,     pcols, lchnk)
    call outfld('FSNRTOAC'//diag(icall), rd%fsnrtc,     pcols, lchnk)
    call outfld('FSNRTOAS'//diag(icall), rd%fsnirtsq,   pcols, lchnk)
@@ -1327,6 +1419,9 @@ subroutine radiation_output_sw(lchnk, ncol, icall, rd, pbuf, cam_out)
 
    call outfld('FSDS'//diag(icall),     fsds,          pcols, lchnk)
    call outfld('FSDSC'//diag(icall),    rd%fsdsc,      pcols, lchnk)
+
+   if (icall == 0) call outfld('ANGSTRM', rd%angstrm, pcols, lchnk)
+   if (icall == 0) call outfld('ANGSTRM_550_865', rd%angstrm865, pcols, lchnk)
 
 end subroutine radiation_output_sw
 
