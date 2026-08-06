@@ -92,7 +92,8 @@ declare -a CASES=(
   "activ_cwturb|microp_aero_wsub_scale=1.3,microp_aero_wsubi_scale=1.3"
   "micro_ccraut|micro_mg_autocon_fact=0.02"
   "micro_ccsaut|micro_mg_iautocon_fact=1.5"
-  "conv_cprcon|zmconv_c0_lnd=0.01,zmconv_c0_ocn=0.01"
+  "conv_cprcon_land|zmconv_c0_lnd=0.00375"
+  "conv_cprcon_ocean|zmconv_c0_ocn=0.24"
   "conv_entrpen|zmconv_dmpdz=-2.0e-3"
   "rad_bc_ni|rad_bc_ni=0.5"
   "rad_oc_ni|rad_oc_ni=0.02"
@@ -159,7 +160,7 @@ run_case() {
     return 0
 }
 
-echo "=== Mandatory PPE parameters: implemented (19) ==="
+echo "=== Mandatory PPE parameters: implemented (20) ==="
 for c in "${CASES[@]}"; do
     label="${c%%|*}"
     varlist="${c#*|}"

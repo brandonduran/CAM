@@ -136,7 +136,25 @@ where a similar knob was already added there.
   activ_cwturb   -> microp_aero_wsub_scale /
                      microp_aero_wsubi_scale    (added in commit 5, above)
   micro_ccraut   -> micro_mg_autocon_fact       (added in commit 5, above)
-  conv_cprcon    -> zmconv_c0_lnd / zmconv_c0_ocn (stock CAM6)
+  conv_cprcon    -> zmconv_c0_lnd / zmconv_c0_ocn (stock CAM6). Later split
+                     (per user decision) into two independent OAT-tooling
+                     protocol parameters, conv_cprcon_land/conv_cprcon_ocean,
+                     since zmconv_c0_lnd/zmconv_c0_ocn are genuinely
+                     independent CAM6 knobs with different native defaults
+                     (0.0075 land / 0.0300 ocean, microphys=mg2,
+                     clubb_sgs=1, phys=cam6) blended by landfrac in
+                     zm_conv.F90's c0mask -- the original single-row mapping
+                     wrote the SAME protocol value to both, erasing that
+                     distinction. No Fortran/namelist changes needed (both
+                     vars already fully wired); this only touches
+                     scripts/oat_parameters.csv and
+                     test/unit/namelist_ppe/test_mandatory_ppe_namelist.sh.
+                     Protocol gives one absolute range [5e-5, 8e-4] s-1,
+                     default 1e-4, for conv_cprcon (no land/ocean
+                     distinction); applied as a 0.5x/8x ratio-of-default
+                     scale on top of each CAM6-native default to get
+                     land [0.00375, 0.06] and ocean [0.015, 0.24],
+                     preserving the protocol's 16:1 low/high spread.
 
 6b. New namelist knobs added this round, all defaulting to no change in
     behavior:
