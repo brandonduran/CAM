@@ -13,8 +13,8 @@
 #
 # It also runs one negative control (an unregistered variable name) to
 # prove the harness actually detects a real registration failure, and
-# checks the 4 deferred parameters (rad_bc_ni, rad_oc_ni, emi_cmr_ff,
-# emi_cmr_bb) are correctly reported as NOT YET IMPLEMENTED.
+# checks the 2 still-deferred parameters (emi_cmr_ff, emi_cmr_bb) are
+# correctly reported as NOT YET IMPLEMENTED.
 #
 # Usage:
 #   test_mandatory_ppe_namelist.sh [-csmdata <inputdata_root>] [-keep]
@@ -94,14 +94,21 @@ declare -a CASES=(
   "micro_ccsaut|micro_mg_iautocon_fact=1.5"
   "conv_cprcon|zmconv_c0_lnd=0.01,zmconv_c0_ocn=0.01"
   "conv_entrpen|zmconv_dmpdz=-2.0e-3"
+  "rad_bc_ni|rad_bc_ni=0.5"
+  "rad_oc_ni|rad_oc_ni=0.02"
+)
+
+# Recommended/Optional-list parameters implemented beyond the mandatory 21
+# (see ppe_changes_incorporated.txt section 8).
+declare -a CASES_EXTRA=(
+  "kappa_so4|kappa_so4=0.5"
+  "micro_icefall|micro_mg_vtrmi_factor=1.3"
 )
 
 # Deferred parameters: expected to NOT be registered yet.
 declare -a DEFERRED=(
   "emi_cmr_ff|emi_cmr_ff=30.0"
   "emi_cmr_bb|emi_cmr_bb=75.0"
-  "rad_bc_ni|rad_bc_ni=0.71"
-  "rad_oc_ni|rad_oc_ni=0.0055"
 )
 
 NPASS=0
@@ -152,7 +159,7 @@ run_case() {
     return 0
 }
 
-echo "=== Mandatory PPE parameters: implemented (17) ==="
+echo "=== Mandatory PPE parameters: implemented (19) ==="
 for c in "${CASES[@]}"; do
     label="${c%%|*}"
     varlist="${c#*|}"
@@ -168,7 +175,23 @@ for c in "${CASES[@]}"; do
     echo
 done
 
-echo "=== Deferred parameters: expected NOT registered (4) ==="
+echo "=== Recommended/Optional parameters implemented beyond the mandatory 21 ==="
+for c in "${CASES_EXTRA[@]}"; do
+    label="${c%%|*}"
+    varlist="${c#*|}"
+    echo "-- $label ($varlist) --"
+    if run_case "$label" "$varlist"; then
+        echo "  PASS"
+        NPASS=$((NPASS+1))
+    else
+        echo "  FAIL"
+        NFAIL=$((NFAIL+1))
+        FAILED_NAMES+=("$label")
+    fi
+    echo
+done
+
+echo "=== Deferred parameters: expected NOT registered (2) ==="
 NDEFER_OK=0
 NDEFER_UNEXPECTED=0
 for c in "${DEFERRED[@]}"; do
@@ -214,7 +237,7 @@ echo "Implemented mandatory params: $NPASS/$((NPASS+NFAIL)) passed"
 if [ $NFAIL -gt 0 ]; then
     echo "  Failed: ${FAILED_NAMES[*]}"
 fi
-echo "Deferred params correctly unregistered: $NDEFER_OK/4"
+echo "Deferred params correctly unregistered: $NDEFER_OK/2"
 if [ "$NDEFER_UNEXPECTED" -gt 0 ]; then
     echo "  WARNING: $NDEFER_UNEXPECTED deferred param(s) unexpectedly registered -- update this test's DEFERRED list."
 fi

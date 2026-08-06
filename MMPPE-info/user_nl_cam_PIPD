@@ -61,11 +61,11 @@
 ! greenhouse gases (2025 values)
 ! /glade/u/home/bduran/multimodel-erfaci/establish-2025-ghg-values.ipynb
 ! From /glade/work/bduran/clean-CAM/forcing_datasets/bc_greenhouse_m_1750_2100.nc
-co2vmr=424.98
-ch4vmr=1967.59
-n2vmr=339.54880
-f11vmr=214.780
-f12vmr=479.925
+co2vmr=424.98e-6
+ch4vmr=1967.59e-9
+n2vmr=339.54880e-9
+f11vmr=214.780e-12
+f12vmr=479.925e-12
 
 ! nudging
 /

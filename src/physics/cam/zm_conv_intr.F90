@@ -75,6 +75,13 @@ module zm_conv_intr
    real(r8) :: zmconv_tiedke_add = unset_r8   ! Convective parcel temperature perturbation
    real(r8) :: zmconv_capelmt = unset_r8      ! Triggering thereshold for ZM convection
    real(r8) :: zmconv_dmpdz = unset_r8        ! Parcel fractional mass entrainment rate (/m)
+   ! MMPPE: kappa_so4 absolute override for SO4 hygroscopicity (ZM's own,
+   ! separate aerosol-activation path -- see the matching, more detailed
+   ! comment in ndrop.F90 above its own copy of this variable, and above
+   ! ndrop_readnl, for why the same namelist group/variable name is
+   ! independently declared+read in both files rather than shared via a
+   ! module dependency). Default -1 (sentinel) = unchanged behavior.
+   real(r8) :: kappa_so4 = -1._r8
 
 
 !  indices for fields in the physics buffer
@@ -182,7 +189,8 @@ subroutine zm_conv_readnl(nlfile)
    namelist /zmconv_nl/ zmconv_c0_lnd, zmconv_c0_ocn, zmconv_num_cin, &
                         zmconv_ke, zmconv_ke_lnd, zmconv_org, &
                         zmconv_momcu, zmconv_momcd, zmconv_microp, &
-                        zmconv_tiedke_add, zmconv_capelmt, zmconv_dmpdz
+                        zmconv_tiedke_add, zmconv_capelmt, zmconv_dmpdz, &
+                        kappa_so4
    !-----------------------------------------------------------------------------
 
    if (masterproc) then
@@ -225,6 +233,8 @@ subroutine zm_conv_readnl(nlfile)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_capelmt")
    call mpi_bcast(zmconv_dmpdz,             1, mpi_real8, masterprocid, mpicom, ierr)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_dmpdz")
+   call mpi_bcast(kappa_so4,                1, mpi_real8, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: kappa_so4")
 
 end subroutine zm_conv_readnl
 
@@ -1144,6 +1154,7 @@ subroutine zm_conv_micro_init()
     integer :: nspecmx   ! max number of species in a mode
 
     character(len=20), allocatable :: aername(:)
+    character(len=20) :: specname_l  ! MMPPE: for the kappa_so4 override below
     character(len=32) :: str32
     character(len=*), parameter :: routine = 'zm_conv_init'
 
@@ -1234,7 +1245,16 @@ subroutine zm_conv_micro_init()
              ! Properties of modal species
              do l = 1, aero%nspec(m)
                 call rad_cnst_get_aer_props(0, m, l, density_aer=aero%specdens(l,m), &
-                   hygro_aer=aero%spechygro(l,m))
+                   hygro_aer=aero%spechygro(l,m), aername=specname_l)
+
+                ! MMPPE: kappa_so4 absolute override -- see the module-level
+                ! comment above this file's kappa_so4 declaration, and the
+                ! fuller comment in ndrop.F90 (the primary activation path).
+                if (kappa_so4 >= 0._r8) then
+                   if (trim(specname_l) == 'so4_a1' .or. trim(specname_l) == 'so4_a2') then
+                      aero%spechygro(l,m) = kappa_so4
+                   end if
+                end if
              end do
           end do
 

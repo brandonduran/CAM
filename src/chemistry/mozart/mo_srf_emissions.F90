@@ -437,10 +437,16 @@ contains
     real(r8) :: mfactor
     integer  :: isec
 
-    character(len=12),parameter :: mks_units(4) = (/ "kg/m2/s     ", &
+    ! "kg m-2 s-1" (CF/input4MIPs convention, e.g. GFED/BB4CMIP7-derived MMPPE
+    ! emission files) added alongside the pre-existing CESM-style slash-
+    ! delimited variants -- without it, a correctly CF-labeled mass-flux file
+    ! silently falls through to the molecules/cm2/s branch below and gets
+    ! scaled by amufac*mw (~1e-22), i.e. read as ~zero.
+    character(len=12),parameter :: mks_units(5) = (/ "kg/m2/s     ", &
                                                      "kg/m2/sec   ", &
                                                      "kg/m^2/s    ", &
-                                                     "kg/m^2/sec  " /)
+                                                     "kg/m^2/sec  ", &
+                                                     "kg m-2 s-1  " /)
     character(len=12) :: units
 
     real(r8), dimension(ncol) :: rlats, rlons 

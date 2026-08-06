@@ -311,6 +311,13 @@
 <iceopticsfile rad="rrtmg">atm/cam/physprops/iceoptics_c080917.nc</iceopticsfile>
 <liqopticsfile rad="rrtmg">atm/cam/physprops/F_nwvl200_mu20_lam50_res64_t298_c080428.nc</liqopticsfile>
 
+<!-- MMPPE rad_bc_ni/rad_oc_ni: BC/OC imaginary refractive index at 550nm,
+     defaulting to the value baked into this branch's default BC/OC
+     physprop files (bcpho_rrtmg_c100508.nc; ocpho_rrtmg_c130709.nc,
+     ocphi_rrtmg_c100508.nc) so an unperturbed namelist is a no-op. -->
+<rad_bc_ni>0.79</rad_bc_ni>
+<rad_oc_ni>0.0056650108</rad_oc_ni>
+
 <!-- CAM-RT absorptivity/emissivity lookup table -->
 <absems_data rad="camrt">atm/cam/rad/abs_ems_factors_fastvx.c030508.nc</absems_data>
 
@@ -1689,6 +1696,7 @@
 <zmconv_tiedke_add                                                    > 0.5     </zmconv_tiedke_add>
 <zmconv_capelmt                                                       > 70.0    </zmconv_capelmt>
 <zmconv_dmpdz                                                         > -1.0e-3 </zmconv_dmpdz>
+<kappa_so4                                                            > -1      </kappa_so4>
 
 <!-- Cloud sedimentation -->
 

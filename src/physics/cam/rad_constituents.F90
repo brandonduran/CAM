@@ -19,7 +19,7 @@ use phys_control,   only: use_simple_phys
 use constituents,   only: cnst_get_ind
 use radconstants,   only: nradgas, rad_gas_index, ot_length
 use phys_prop,      only: physprop_accum_unique_files, physprop_init, &
-                          physprop_get_id
+                          physprop_get_id, rad_bc_ni, rad_oc_ni
 use cam_history,    only: addfld, fieldname_len, outfld, horiz_only
 use physics_buffer, only: physics_buffer_desc, pbuf_get_field, pbuf_get_index
 
@@ -253,7 +253,9 @@ subroutine rad_cnst_readnl(nlfile)
                           liqopticsfile, &
                           icecldoptics,  &
                           liqcldoptics,  &
-                          oldcldoptics
+                          oldcldoptics,  &
+                          rad_bc_ni,     &
+                          rad_oc_ni
 
    !-----------------------------------------------------------------------------
 
@@ -292,6 +294,8 @@ subroutine rad_cnst_readnl(nlfile)
    call mpibcast (liqcldoptics,  len(liqcldoptics),                mpichar, 0, mpicom)
    call mpibcast (icecldoptics,  len(icecldoptics),                mpichar, 0, mpicom)
    call mpibcast (oldcldoptics,  1,                                mpilog , 0, mpicom)
+   call mpibcast (rad_bc_ni,     1,                                mpir8  , 0, mpicom)
+   call mpibcast (rad_oc_ni,     1,                                mpir8  , 0, mpicom)
 #endif
 
    ! Parse the namelist input strings

@@ -33,7 +33,7 @@ implicit none
 private
 save
 
-public ndrop_init, dropmixnuc, activate_modal, loadaer
+public ndrop_init, ndrop_readnl, dropmixnuc, activate_modal, loadaer
 
 real(r8), allocatable :: alogsig(:)     ! natl log of geometric standard dev of aerosol
 real(r8), allocatable :: exp45logsig(:)
@@ -59,6 +59,23 @@ real(r8), parameter :: supersat(psat)= & ! supersaturation (%) to determine ccn 
                        (/ 0.02_r8, 0.05_r8, 0.1_r8, 0.2_r8, 0.5_r8, 1.0_r8, 0.3_r8 /)
 character(len=8) :: ccn_name(psat)= &
                     (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6','CCN7'/)
+
+! MMPPE: absolute override for SO4 hygroscopicity (kappa_so4, protocol
+! category "Hygroscopicity"). Default is a sentinel (-1, physically
+! impossible for a hygroscopicity parameter) meaning "leave the physprop
+! netCDF lookup table's SO4 value untouched" -- i.e. unchanged default
+! behavior. When set to a non-negative value in the namelist, it REPLACES
+! (not scales -- MMPPE lists this parameter as Abs, not Rel) SO4's
+! hygro_aer for both SO4-bearing MAM4 modes (so4_a1 accumulation, so4_a2
+! aitken; MAM4 has no SO4 in the coarse/a3 or primary-carbon/a4 modes) at
+! the point of use in loadaer() below. Deliberately does NOT touch
+! hetfrz_classnuc_cam.F90's separate, independently-hardcoded
+! spechygro_so4 parameter -- that's a different physical process
+! (heterogeneous ice nucleation classification, not droplet activation),
+! using its own independent constant; scoped out per explicit user
+! decision. Also applied in zm_conv_intr.F90's aerosol init (ZM's own,
+! separate activation path) -- see the matching note there.
+real(r8) :: kappa_so4 = -1._r8
 
 ! indices in state and pbuf structures
 integer :: numliq_idx = -1
@@ -98,6 +115,55 @@ logical :: lq(pcnst) = .false. ! set flags true for constituents with non-zero t
 !===============================================================================
 contains
 !===============================================================================
+
+!===============================================================================
+! MMPPE: reads kappa_so4 (see the module-level comment above its declaration).
+! Registered under the SAME namelist group name ("zmconv_nl") that
+! zm_conv_intr.F90 already reads kappa_so4 from for its own copy -- this is
+! not a naming accident: build-namelist writes a single &zmconv_nl ... /
+! block into atm_in containing kappa_so4 (namelist_definition.xml registers
+! it once, group="zmconv_nl"), and both this file and zm_conv_intr.F90
+! independently declare their own local `namelist /zmconv_nl/ kappa_so4`
+! and read that same block -- a standard, valid Fortran pattern (multiple
+! compilation units reading the same named group from the same file) used
+! here specifically to avoid adding a new ndrop.F90<->zm_conv_intr.F90
+! module dependency (zm_conv_intr.F90 already reads zmconv_nl for its own
+! parameters; microp_aero.F90 was the more semantically-obvious home but
+! already `use ndrop`, so ndrop.F90 using it back would be circular).
+! Called from chemistry.F90's chem_readnl, parallel to srf_emis_scale_readnl.
+!===============================================================================
+subroutine ndrop_readnl(nlfile)
+
+   use namelist_utils, only: find_group_name
+   use units,           only: getunit, freeunit
+   use mpishorthand
+
+   character(len=*), intent(in) :: nlfile
+
+   integer :: unitn, ierr
+   character(len=*), parameter :: subname = 'ndrop_readnl'
+
+   namelist /zmconv_nl/ kappa_so4
+
+   if (masterproc) then
+      unitn = getunit()
+      open( unitn, file=trim(nlfile), status='old' )
+      call find_group_name(unitn, 'zmconv_nl', status=ierr)
+      if (ierr == 0) then
+         read(unitn, zmconv_nl, iostat=ierr)
+         if (ierr /= 0) then
+            call endrun(subname // ':: ERROR reading namelist')
+         end if
+      end if
+      close(unitn)
+      call freeunit(unitn)
+   end if
+
+#ifdef SPMD
+   call mpibcast(kappa_so4, 1, mpir8, 0, mpicom)
+#endif
+
+end subroutine ndrop_readnl
 
 subroutine ndrop_init
 
@@ -1951,6 +2017,7 @@ subroutine loadaer( &
    real(r8), pointer :: raer(:,:) ! interstitial aerosol mass, number mixing ratios
    real(r8), pointer :: qqcw(:,:) ! cloud-borne aerosol mass, number mixing ratios
    real(r8) :: specdens, spechygro
+   character(len=20) :: specname  ! MMPPE: for the kappa_so4 override below
 
    real(r8) :: vol(pcols) ! aerosol volume mixing ratio
    integer  :: i, l
@@ -1967,7 +2034,16 @@ subroutine loadaer( &
 
       call rad_cnst_get_aer_mmr(0, m, l, 'a', state, pbuf, raer)
       call rad_cnst_get_aer_mmr(0, m, l, 'c', state, pbuf, qqcw)
-      call rad_cnst_get_aer_props(0, m, l, density_aer=specdens, hygro_aer=spechygro)
+      call rad_cnst_get_aer_props(0, m, l, density_aer=specdens, hygro_aer=spechygro, &
+                                  aername=specname)
+
+      ! MMPPE: kappa_so4 absolute override -- see the module-level comment
+      ! above this variable's declaration.
+      if (kappa_so4 >= 0._r8) then
+         if (trim(specname) == 'so4_a1' .or. trim(specname) == 'so4_a2') then
+            spechygro = kappa_so4
+         end if
+      end if
 
       if (phase == 3) then
          do i = istart, istop

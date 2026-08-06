@@ -33,6 +33,15 @@ public :: &
    physprop_get_id,              &! Return ID used to access the property data from the input files
    physprop_get                   ! Return data for specified ID
 
+! MMPPE rad_bc_ni/rad_oc_ni: PPE-tunable BC/OC imaginary refractive index at
+! 550 nm (idx_sw_diag band). Defaults are the values already baked into this
+! branch's default physprop files (bcpho_rrtmg_c100508.nc, aername BCPHO;
+! ocpho_rrtmg_c130709.nc/ocphi_rrtmg_c100508.nc, aername OCPHO/OCPHI), so an
+! unperturbed namelist reproduces the unmodified spectral shape (scale
+! factor ~1). See bulk_props_init for where these are applied.
+real(r8), public :: rad_bc_ni = 0.79_r8
+real(r8), public :: rad_oc_ni = 0.0056650108_r8
+
 ! Data from one input dataset is stored in a structure of type(physprop_type).
 type :: physprop_type
    character(len=256) :: sourcefile ! Absolute pathname of data file.
@@ -1132,7 +1141,20 @@ subroutine bulk_props_init(physprop, nc_id)
 
    ierr = pio_inq_varid(nc_id, 'num_to_mass_ratio', vid)
    ierr = pio_get_var(nc_id, vid, physprop%num_to_mass_aer)
-      
+
+   ! MMPPE rad_bc_ni/rad_oc_ni: scale this species' SW imaginary refractive
+   ! index at every band by the ratio of the requested 550 nm (idx_sw_diag)
+   ! value to the value already in this physprop file, preserving the
+   ! file's native spectral shape. LW is intentionally left untouched.
+   if (associated(physprop%refindex_aer_sw)) then
+      if (trim(physprop%aername) == 'BCPHO') then
+         call scale_refindex_im_sw(physprop%refindex_aer_sw, rad_bc_ni)
+      else if (trim(physprop%aername) == 'OCPHO' .or. &
+               trim(physprop%aername) == 'OCPHI') then
+         call scale_refindex_im_sw(physprop%refindex_aer_sw, rad_oc_ni)
+      end if
+   end if
+
    ! Output select data to log file
    if (debug .and. masterproc) then
       if (trim(physprop%aername) == 'SULFATE') then
@@ -1144,6 +1166,32 @@ subroutine bulk_props_init(physprop, nc_id)
    end if
 
 end subroutine bulk_props_init
+
+!================================================================================================
+
+subroutine scale_refindex_im_sw(refindex_aer_sw, new_ni_550)
+
+   ! MMPPE rad_bc_ni/rad_oc_ni helper: rescale the imaginary part of a
+   ! species' SW refractive index at every band so that its value at the
+   ! 550 nm (idx_sw_diag) band equals new_ni_550, preserving the ratios
+   ! between bands (i.e. the file's native spectral shape). The real part
+   ! is left unchanged.
+
+   complex(r8), intent(inout) :: refindex_aer_sw(:)
+   real(r8),    intent(in)    :: new_ni_550
+
+   real(r8) :: scale_factor
+   integer  :: i
+   !------------------------------------------------------------------------------------
+
+   scale_factor = new_ni_550 / aimag(refindex_aer_sw(idx_sw_diag))
+
+   do i = 1, size(refindex_aer_sw)
+      refindex_aer_sw(i) = cmplx(real(refindex_aer_sw(i)), &
+                                  aimag(refindex_aer_sw(i)) * scale_factor, kind=r8)
+   end do
+
+end subroutine scale_refindex_im_sw
 
 !================================================================================================
 

@@ -34,23 +34,89 @@
 ! greenhouse gases (2025 values)
 ! /glade/u/home/bduran/multimodel-erfaci/establish-2025-ghg-values.ipynb
 ! From /glade/work/bduran/clean-CAM/forcing_datasets/bc_greenhouse_m_1750_2100.nc
-co2vmr=424.98
-ch4vmr=1967.59
-n2vmr=339.54880
-f11vmr=214.780
-f12vmr=479.925
+co2vmr=424.98e-6
+ch4vmr=1967.59e-9
+n2vmr=339.54880e-9
+f11vmr=214.780e-12
+f12vmr=479.925e-12
 
+!-------------------------------------------------------------------------------
+! Biomass-burning surface emissions (GFED NRT, PD/2025 -- per MMPPE.md's
+! "Biomass burning emission: GFED5.1 (daily) for PD" and general forcing
+! datasets note). Source data regridded to f09 in
+! /glade/work/bduran/clean-CAM/forcing_datasets/regridded/. Pointed at the
+! 2025 file (not 2024/2026) and cycled on that single year so the 3-month
+! spin-up (and any OAT run that reuses this block) loops it cyclically
+! rather than running off the end of a single calendar year.
+!
+! srf_emis_specifier targets below use "*_bb_*"-tagged SYMLINKS to the real
+! regridded files, not the real files directly: this branch's
+! mo_srf_emissions.F90 (get_srf_emis_ppe_scale) only applies the
+! emi_bb_bc/emi_bb_oc/emi_bb_so2 PPE scale factors when the emission
+! filename contains "_bb_" (see ppe_changes_incorporated.txt, 6b). The
+! as-regridded GFED filenames (emiss_GFED_NRT_<SPECIES>_wildfire_2025_...)
+! don't contain that tag, which would silently leave those three knobs
+! inert once perturbed in the later OAT runs even though this CTL run
+! (all scale factors at their default of 1.0) is unaffected either way.
+! Harmless no-op for THIS file; load-bearing for the emi_bb_bc/oc/so2 OAT
+! parameter_L/H runs that get initialized from this spin-up.
+!
+! UNITS FIX: the regridded GFED/BB4CMIP7 files carry units="kg m-2 s-1"
+! (CF/input4MIPs convention), which did NOT match mo_srf_emissions.F90's
+! mks_units whitelist (only slash-delimited variants: "kg/m2/s" etc) --
+! that would have silently sent these files down the molecules/cm2/s
+! branch and scaled true mass flux by amufac*mw (~1e-22), i.e. read as
+! ~zero. Fixed by adding "kg m-2 s-1" to mks_units in mo_srf_emissions.F90
+! directly (so any correctly CF-labeled file works without renaming/
+! recopying). Re-run case.build after any fresh checkout of this branch to
+! pick up that source change.
+!
+! num_a4 (companion number-emission flux for bc_a4/pom_a4 biomass burning):
+! derived from the GFED BC/OC mass flux files via
+! num_a4_raw = mass_flux_kg_m2_s / (amufac * rho*(pi/6)*diam^3), the same
+! formula/assumed particle size (diam=0.134e-6 m, matching this branch's
+! fire_emissions.F90 demis_acc constant) as
+! /glade/u/home/emmons/CMIP6/emissions_hist/make_emis_cmip6_mam4num.pro --
+! validated by reproducing the archived emissions-cmip6_num_pom_a4_bb_
+! surface_1750-2015 file's num/mass ratio to ~0.005%. emi_cmr_bb (the PPE
+! knob that would otherwise let CAM derive number from mass at runtime) is
+! still not implemented (ppe_changes_incorporated.txt, 6c), so this is a
+! static, unperturbable number-emission dataset consistent with this CTL
+! run's all-defaults state -- revisit if emi_cmr_bb is ever implemented.
+!
+! NOT YET INCLUDED (known gaps, not resolved this round):
+!   - CEDS anthropogenic emissions -- not yet regridded/available in
+!     forcing_datasets/regridded/; anthropogenic srf_emis wiring is left
+!     on whatever this case's default namelist provides.
+!   - Ozone (CMIP7 ScenarioMIP "vl") and SST/SIC (ERA5 2025) forcing:
+!     deferred this round. The regridded ozone file's vertical dimension
+!     is named "plev", but this branch's tracer_data.F90 hardcodes a
+!     lookup for a dimension literally named "lev" -- needs a rename (or a
+!     regridding-pipeline fix) before prescribed_ozone_nl can use it.
+!     SST/SIC is a data-ocean/ice (user_nl_docn/SSTICE_DATA_FILENAME)
+!     setting, not a user_nl_cam one, and is out of scope for this file.
+!-------------------------------------------------------------------------------
+&chem_inparm
+ srf_emis_type      = 'CYCLICAL'
+ srf_emis_cycle_yr  = 2025
+ srf_emis_specifier = 'bc_a4  -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_BC_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'pom_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_OC_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'SO2    -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_SO2_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'DMS    -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_C2H6S_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_bc_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_pom_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc'
 /
+
 &nudging_nl
  nudge_model=.true.
  nudge_path            = '/glade/campaign/cesm/cesmdata/inputdata/atm/cam/met/nudging/MERRA2_fv09_32L/'
 nudge_file_template   = '%y/MERRA2_fv09.cam2.i.%y-%m-%d-%s.nc'
 nudge_beg_day         = 1
-nudge_beg_month       = 1
+nudge_beg_month       = 5
 nudge_beg_year        = 2025
 nudge_end_day         = 31
 nudge_end_month       = 4
-nudge_end_year        = 2012
+nudge_end_year        = 2025
 nudge_times_per_day   = 8
 model_times_per_day   = 48
  nudge_ucoef            = 0.25

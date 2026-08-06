@@ -1741,6 +1741,10 @@ if ($rrtmg) {
     add_default($nl, 'iceopticsfile');
 }
 
+# MMPPE rad_bc_ni/rad_oc_ni -- BC/OC imaginary refractive index at 550nm
+add_default($nl, 'rad_bc_ni');
+add_default($nl, 'rad_oc_ni');
+
 # Volcanic Aerosol Mass climatology dataset
 if ($nl->get_value('strat_volcanic')) { add_default($nl, 'bndtvvolc'); }
 
@@ -3138,6 +3142,7 @@ if (!$simple_phys) {
     add_default($nl, 'zmconv_tiedke_add');
     add_default($nl, 'zmconv_capelmt');
     add_default($nl, 'zmconv_dmpdz');
+    add_default($nl, 'kappa_so4');
 }
 
 # moist convection rainwater coefficients

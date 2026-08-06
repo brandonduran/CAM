@@ -192,14 +192,8 @@ where a similar knob was already added there.
   (CAM7 also leaves its land entrainment hardcoded).
 
 6c. Deliberately deferred (not implemented this round, per user decision):
-  rad_bc_ni, rad_oc_ni   -- BC/OC imaginary refractive index. No knob
-    exists in CAM6 or CAM7; refractive index is baked into physprop
-    netCDF lookup tables. BC's is spectrally flat (checked actual data:
-    -0.79 across all 14 SW bands) but OC's varies 15x band-to-band
-    (-0.005 to -0.079), so a literal absolute-override knob would behave
-    very differently for the two species. Runtime hook would be in
-    modal_aer_opt.F90 (modal_aero_sw/lw, where per-species refractive
-    index is volume-mixed into the mode's bulk value) if revisited.
+  rad_bc_ni, rad_oc_ni -- BC/OC imaginary refractive index. Deferred here;
+    implemented later, see section 9 below.
   emi_cmr_ff, emi_cmr_bb -- emitted particle size (count median radius)
     for fossil-fuel/biomass-burning emissions. No knob in CAM6 or CAM7;
     the assumed size is baked into separate, independently-prescribed
@@ -411,6 +405,158 @@ where a similar knob was already added there.
   the AOD400/AOD700 scope decision in 7c). Not on by default; add via
   fincl. Like 7a-7d, not yet validated against real model output.
 
+8. Two parameters beyond the mandatory 21, from MMPPE's Recommended (8) and
+  Optional (14) lists (see MMPPE-info/MMPPE.md), added at user request
+  after scripts/oat_parameters.csv (the OAT L/H run automation's
+  protocol-name-to-namelist-variable table) was built and the user wanted
+  to extend coverage beyond the mandatory 17:
+
+8a. micro_icefall -> micro_mg_vtrmi_factor: ZERO code changes needed --
+  already fully wired (namelist_definition.xml, namelist_defaults_cam.xml
+  default 1.D0 matching the protocol default, add_default() in
+  build-namelist) from earlier PPE-knob work on this branch, for a
+  different purpose. One caveat worth knowing: this knob scales BOTH
+  cloud ice (vtrmi) and snow (ums) mass-weighted fall velocity in
+  micro_mg2_0.F90, not just cloud ice as the protocol's "terminal fall
+  velocity of cloud ice crystals" wording implies -- broader scope than a
+  literal reading of the protocol, but the closest (only) available knob.
+  Verified via test/unit/namelist_ppe/test_mandatory_ppe_namelist.sh
+  (added as a new case there, alongside kappa_so4 below) that it round-
+  trips correctly through build-namelist.
+
+8b. kappa_so4: NEW code, in 3 files plus namelist registration. SO4's
+  hygroscopicity (kappa) is read from a physprop netCDF lookup table at
+  runtime (phys_prop.F90's pio_get_var(nc_id, vid, physprop%hygro_aer))
+  -- the same kind of "baked into a data file" situation that got
+  rad_bc_ni/rad_oc_ni deferred in section 6c -- but more tractable here
+  since hygro_aer is consumed at a small number of well-defined call
+  sites via rad_cnst_get_aer_props(...,hygro_aer=...), not spread through
+  a whole radiative-optics pipeline.
+    - New namelist variable kappa_so4 (real, group="zmconv_nl" for
+      build-namelist purposes only -- see below for why -- default -1,
+      a sentinel meaning "no override, physprop table value unchanged").
+      MMPPE lists this parameter as Abs (an absolute value), not Rel, so
+      a non-negative kappa_so4 REPLACES (does not scale) SO4's
+      hygro_aer, for both SO4-bearing MAM4 modes (so4_a1 accumulation,
+      so4_a2 aitken -- confirmed these are MAM4's only SO4-carrying
+      modes; there is no so4 in the coarse/a3 or primary-carbon/a4
+      modes).
+    - ndrop.F90 (the main/most frequently called stratiform activation
+      path, loadaer()): added the kappa_so4 module variable, a new
+      public ndrop_readnl(nlfile) subroutine (called from chemistry.F90's
+      chem_readnl, parallel to srf_emis_scale_readnl -- confirmed no
+      circular dependency: ndrop.F90 does not use chemistry.F90), and the
+      override itself in loadaer's per-species loop (added aername to its
+      existing rad_cnst_get_aer_props call to identify so4_a1/so4_a2).
+    - zm_conv_intr.F90 (ZM's own, separate convective-aerosol activation
+      path, in zm_conv_init's aerosol-property init loop -- this path
+      caches all species' spechygro into an array ONCE at init, not per
+      timestep, so the override only needed adding in one place): added
+      kappa_so4 to the EXISTING zmconv_nl namelist/readnl (a small,
+      low-risk addition to already-established infrastructure) and the
+      same aername-based override logic in its aerosol-property init
+      loop.
+    - Why kappa_so4 is registered under group="zmconv_nl" even though
+      it's not a ZM convection parameter: microp_aero.F90 was the more
+      semantically obvious home (it already hosts activ_aero/
+      activ_cwturb's knobs) but already `use ndrop`, so ndrop.F90 using
+      it back would be a circular module dependency. zmconv_nl was
+      already fully wired in zm_conv_intr.F90 and has no such issue.
+      ndrop.F90 independently declares its own `namelist /zmconv_nl/
+      kappa_so4` and reads the same named group from the same atm_in
+      file as zm_conv_intr.F90 does -- a standard, valid Fortran pattern
+      (multiple compilation units reading the same named group), chosen
+      specifically to avoid adding any new module-to-module dependency.
+    - Explicitly NOT touched, per user decision: hetfrz_classnuc_cam.F90
+      has its own separate, independently hardcoded spechygro_so4 =
+      0.507_r8 parameter, used for heterogeneous ice nucleation
+      classification -- a different physical process from droplet
+      activation, using its own independent constant. kappa_so4 does not
+      override it. Document this scoping decision if kappa_so4 is
+      revisited -- it would be an easy thing for a future change to
+      accidentally "complete" without realizing it was deliberately
+      excluded.
+  Verified via test/unit/namelist_ppe/test_mandatory_ppe_namelist.sh
+  (new case added there) that kappa_so4 registers correctly and
+  round-trips through build-namelist; the actual Fortran override logic
+  (species-name matching in ndrop.F90/zm_conv_intr.F90) is NOT covered by
+  that test (it only drives build-namelist, doesn't compile/run CAM) and
+  is, like everything else on this branch, not yet validated against
+  real model output.
+
+  Both parameters added to scripts/oat_parameters.csv (categories
+  "recommended"/"optional" respectively) with PLACEHOLDER low/high
+  values, same convention as the mandatory-21 rows there.
+
+9. rad_bc_ni, rad_oc_ni -- BC/OC imaginary refractive index at 550nm
+  (the 2 of the mandatory-21 MMPPE parameters deferred in section 6c,
+  revisited per explicit user clarification on how the protocol intends
+  wavelength-dependent species to be handled).
+
+  Per user clarification, the protocol value is defined at 550nm; for a
+  species whose imaginary refractive index varies by SW band, all SW
+  wavelengths are scaled by the same factor (new_value / value_at_550nm),
+  preserving the species' native spectral shape. LW is explicitly ignored
+  (not important for aerosol extinction per the protocol clarification).
+  Reference implementation given was ICON-HAM's cni(1:Nwv_sw_tot,iradbc)
+  *= (bc_rad_ni / cni(Nwv_sw+1,iradbc)) -- adapted here since CAM's
+  RRTMG-SW discretization has no dedicated extra reference-wavelength
+  array slot the way ICON-HAM's cni does; idx_sw_diag (radconstants.F90,
+  =10, the 441-625nm band) is used as the in-band 550nm equivalent --
+  this is already CAM's own established stand-in for "550nm" (used the
+  same way elsewhere in phys_prop.F90 for a SULFATE visible-band
+  diagnostic, and in this branch's ANGSTRM/AODVIS diagnostics).
+
+  No CAM6/CAM7 knob previously existed for either parameter -- the
+  imaginary refractive index is baked into the physprop netCDF lookup
+  tables read at runtime (phys_prop.F90), not a Fortran constant. Checked
+  this branch's default BC/OC physprop files directly: BC's imaginary
+  refractive index (bcpho_rrtmg_c100508.nc, aername BCPHO) is spectrally
+  flat at 0.79 across all 14 SW bands; OC's (ocpho_rrtmg_c130709.nc,
+  aername OCPHO for POM; ocphi_rrtmg_c100508.nc, aername OCPHI for SOA)
+  varies ~15x band-to-band (0.005-0.079) but is numerically IDENTICAL
+  between the POM and SOA files in this branch's defaults -- so
+  rad_oc_ni scales both consistently from the same starting data.
+
+  - phys_prop.F90: new public module reals rad_bc_ni (default 0.79) and
+    rad_oc_ni (default 0.0056650108), defaulting to the actual values
+    baked into this branch's default physprop files (not a sentinel --
+    per user decision, since this PPE will use the same physprop lookup
+    tables throughout, an unperturbed namelist reproduces the unmodified
+    data via a scale factor of ~1). New scale_refindex_im_sw() helper
+    rescales a species' refindex_aer_sw(:) imaginary part at every SW
+    band by (new_ni_550 / refindex_aer_sw(idx_sw_diag)'s current value),
+    leaving the real part untouched. Called from bulk_props_init() --
+    the single point downstream of refindex_aer_init() (which has
+    already populated refindex_aer_sw) that all three optics-init code
+    paths BC/OC actually use (insoluble_optics_init for BCPHO/OCPHO,
+    hygroscopic_optics_init for OCPHI) funnel through, keyed on
+    physprop%aername so one hook covers both species without
+    duplicating the call in three places.
+  - rad_constituents.F90: rad_bc_ni/rad_oc_ni registered in the existing
+    rad_cnst_nl namelist (use-associated from phys_prop, since
+    rad_cnst_readnl already runs before rad_cnst_init calls
+    physprop_init -- guaranteed correct read-before-use ordering without
+    a new readnl/module dependency).
+  - namelist_definition.xml / namelist_defaults_cam.xml / build-namelist:
+    registered under group="rad_cnst_nl", add_default() called
+    unconditionally (not gated on rrtmg, since the MAM4 physprop files
+    these scale are radiation-package-agnostic).
+  - test/unit/namelist_ppe/test_mandatory_ppe_namelist.sh: moved from
+    the DEFERRED (expected-absent) block into the main CASES
+    (implemented, round-trip-checked) block; mandatory-implemented count
+    updated 17 -> 19, deferred count 4 -> 2 (emi_cmr_ff/emi_cmr_bb only).
+  - scripts/oat_parameters.csv: added as mandatory-category rows
+    (PLACEHOLDER low/high, per this file's existing convention) with
+    notes on the CAM-baked-in vs. protocol default discrepancy (BC:
+    0.79 vs. protocol's 0.71; OC: ~0.00567 vs. protocol's 0.0055).
+
+  Not covered by any test: the actual Fortran scaling logic
+  (scale_refindex_im_sw) is not exercised by
+  test_mandatory_ppe_namelist.sh (that test only drives build-namelist,
+  doesn't compile/run CAM) and, like everything else on this branch, is
+  not yet validated against real model output.
+
 
 Not yet done
 ------------------------------------------------------------
@@ -421,7 +567,7 @@ Not yet done
   short control run (MG2, no knobs perturbed) compared against the
   original new-ppe/clean-CAM baseline before using this branch for a
   production PPE.
-- rad_bc_ni, rad_oc_ni, emi_cmr_ff, emi_cmr_bb (4 of the 21 MMPPE
-  mandatory parameters) remain unimplemented -- see 6c above.
+- emi_cmr_ff, emi_cmr_bb (2 of the 21 MMPPE mandatory parameters) remain
+  unimplemented -- see 6c above.
 - See section 7 above for MMPPE output-diagnostic items explicitly
   deferred this round (broader output_aerocom_aie.F90 port, CBH).

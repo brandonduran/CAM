@@ -2950,6 +2950,21 @@ in units of (m-1).
 Default: -1.0e-3 m-1
 </entry>
 
+<entry id="kappa_so4" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+PPE-tunable absolute override for SO4 aerosol hygroscopicity (kappa),
+applied to both SO4-bearing MAM4 modes (accumulation, aitken) in both the
+stratiform (ndrop.F90) and ZM convective (zm_conv_intr.F90) activation
+paths. A sentinel of -1 (physically impossible for a hygroscopicity
+parameter) means "leave the physprop-table value unchanged" -- the
+default. Any value >= 0 replaces (not scales) SO4's hygroscopicity.
+Registered under group="zmconv_nl" for build-namelist purposes only
+(there is no other natural single home -- see the MMPPE comments in
+ndrop.F90 and zm_conv_intr.F90 for why); it is not a ZM convection
+parameter.
+Default: -1 (no override)
+</entry>
+
 
 <!-- Cloud sedimentation -->
 
@@ -4489,6 +4504,33 @@ Default: none
        group="rad_cnst_nl" valid_values="" >
 filepath and name for liquid cloud (gamma distributed) optics data for rrtmg
 Default: none
+</entry>
+
+<entry id="rad_bc_ni" type="real" category="radiation"
+       group="rad_cnst_nl" valid_values="" >
+PPE-tunable BC imaginary refractive index at 550 nm (MMPPE rad_bc_ni). BC's
+imaginary refractive index, as stored in the BC physprop file (aername
+BCPHO), is spectrally flat across all SW bands, so this value is applied
+uniformly: every SW band's imaginary refractive index is scaled by
+rad_bc_ni / (value already at the 550 nm band), preserving the physprop
+file's native spectral shape. LW is not affected.
+Default: 0.79 (the value baked into this branch's default BC physprop
+file, bcpho_rrtmg_c100508.nc -- an unperturbed namelist reproduces the
+unmodified data).
+</entry>
+
+<entry id="rad_oc_ni" type="real" category="radiation"
+       group="rad_cnst_nl" valid_values="" >
+PPE-tunable OC imaginary refractive index at 550 nm (MMPPE rad_oc_ni).
+Applied to both OC-bearing physprop files (aername OCPHO, used by POM;
+aername OCPHI, used by SOA) by scaling every SW band's imaginary
+refractive index by rad_oc_ni / (value already at the 550 nm band),
+preserving each file's native spectral shape (OC's imaginary refractive
+index varies by more than an order of magnitude band-to-band, unlike
+BC's). LW is not affected.
+Default: 0.0056650108 (the value baked into this branch's default OC
+physprop files at the 550 nm band -- an unperturbed namelist reproduces
+the unmodified data).
 </entry>
 
 
