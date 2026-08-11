@@ -358,8 +358,11 @@ subroutine ndrop_init
    call addfld('CCN6',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=1.0%')
    ! MMPPE OAT: exact-match bin for ccns.3/ccncol.3 (S=0.3%); see psat/supersat/
    ! ccn_name note above for why this is appended as CCN7 instead of being
-   ! inserted between CCN4 and CCN5.
-   call addfld('CCN7',(/ 'lev' /), 'A','#/cm3','CCN concentration at S=0.3%')
+   ! inserted between CCN4 and CCN5. Output in #/m3 (unlike CCN1-6, which stay
+   ! #/cm3 -- CGS is the CAM convention) so it matches the MMPPE OAT/ICON-HAM
+   ! template's m3 convention for ccns.3, and CCN7COL/CCN7BL below, which
+   ! already use #/m2 and #/m3.
+   call addfld('CCN7',(/ 'lev' /), 'A','#/m3','CCN concentration at S=0.3%')
 
    ! MMPPE: native column-integrated and 1km-AGL CCN@S=0.3% diagnostics, giving
    ! ccncol.3/CCN_BURDEN_0.300 and CCN_BL1_0.300 real model output instead of a
@@ -1293,7 +1296,11 @@ subroutine dropmixnuc( &
 
    call ccncalc(state, pbuf, cs, ccn)
    do l = 1, psat
-      call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
+      if (trim(ccn_name(l)) == 'CCN7') then
+         call outfld(ccn_name(l), ccn(1,1,l)*1.0e6_r8, pcols, lchnk)  ! #/cm3 -> #/m3
+      else
+         call outfld(ccn_name(l), ccn(1,1,l), pcols, lchnk)
+      end if
    enddo
 
    ! MMPPE: column-integrated and 1km-AGL CCN@S=0.3% (CCN7COL/CCN7BL), adapted from
