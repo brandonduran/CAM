@@ -60,22 +60,33 @@ real(r8), parameter :: supersat(psat)= & ! supersaturation (%) to determine ccn 
 character(len=8) :: ccn_name(psat)= &
                     (/'CCN1','CCN2','CCN3','CCN4','CCN5','CCN6','CCN7'/)
 
-! MMPPE: absolute override for SO4 hygroscopicity (kappa_so4, protocol
-! category "Hygroscopicity"). Default is a sentinel (-1, physically
-! impossible for a hygroscopicity parameter) meaning "leave the physprop
-! netCDF lookup table's SO4 value untouched" -- i.e. unchanged default
-! behavior. When set to a non-negative value in the namelist, it REPLACES
-! (not scales -- MMPPE lists this parameter as Abs, not Rel) SO4's
-! hygro_aer for both SO4-bearing MAM4 modes (so4_a1 accumulation, so4_a2
-! aitken; MAM4 has no SO4 in the coarse/a3 or primary-carbon/a4 modes) at
-! the point of use in loadaer() below. Deliberately does NOT touch
+! MMPPE: absolute overrides for SO4 and secondary-organic (SOA) aerosol
+! hygroscopicity (kappa_so4, kappa_oc; protocol category "Hygroscopicity").
+! Default is a sentinel (-1, physically impossible for a hygroscopicity
+! parameter) meaning "leave the physprop netCDF lookup table's value
+! untouched" -- i.e. unchanged default behavior. When set to a non-negative
+! value in the namelist, it REPLACES (not scales -- MMPPE lists these as
+! Abs, not Rel) the matching species' hygro_aer at the point of use in
+! loadaer() below.
+!
+! CHANGED 2026-08-07: originally matched by hardcoded MAM4 mode/species
+! name (so4_a1, so4_a2 only, kappa_so4 only). Reworked to match by species
+! TYPE ('sulfate', 'ammonium' -> kappa_so4; 's-organic' -> kappa_oc)
+! instead, for consistency with kgohil's
+! mods_mmppe.camdev.001/aerosol_state_mod.F90 reference implementation,
+! which does the same spectype-based match in its own loadaer(). This is a
+! behavior change: kappa_so4 now also overrides any future/other mode
+! carrying a sulfate or ammonium species (not just so4_a1/so4_a2), and
+! kappa_oc is a new override (previously unimplemented on this branch) for
+! s-organic (SOA) species. Still deliberately does NOT touch
 ! hetfrz_classnuc_cam.F90's separate, independently-hardcoded
 ! spechygro_so4 parameter -- that's a different physical process
 ! (heterogeneous ice nucleation classification, not droplet activation),
 ! using its own independent constant; scoped out per explicit user
-! decision. Also applied in zm_conv_intr.F90's aerosol init (ZM's own,
-! separate activation path) -- see the matching note there.
+! decision. Both overrides are also applied in zm_conv_intr.F90's aerosol
+! init (ZM's own, separate activation path) -- see the matching note there.
 real(r8) :: kappa_so4 = -1._r8
+real(r8) :: kappa_oc  = -1._r8
 
 ! indices in state and pbuf structures
 integer :: numliq_idx = -1
@@ -117,19 +128,23 @@ contains
 !===============================================================================
 
 !===============================================================================
-! MMPPE: reads kappa_so4 (see the module-level comment above its declaration).
-! Registered under the SAME namelist group name ("zmconv_nl") that
-! zm_conv_intr.F90 already reads kappa_so4 from for its own copy -- this is
-! not a naming accident: build-namelist writes a single &zmconv_nl ... /
-! block into atm_in containing kappa_so4 (namelist_definition.xml registers
-! it once, group="zmconv_nl"), and both this file and zm_conv_intr.F90
-! independently declare their own local `namelist /zmconv_nl/ kappa_so4`
-! and read that same block -- a standard, valid Fortran pattern (multiple
-! compilation units reading the same named group from the same file) used
-! here specifically to avoid adding a new ndrop.F90<->zm_conv_intr.F90
-! module dependency (zm_conv_intr.F90 already reads zmconv_nl for its own
-! parameters; microp_aero.F90 was the more semantically-obvious home but
-! already `use ndrop`, so ndrop.F90 using it back would be circular).
+! MMPPE: reads kappa_so4/kappa_oc (see the module-level comment above their
+! declaration). Registered under the SAME namelist group name ("zmconv_nl")
+! that zm_conv_intr.F90 already reads kappa_so4/kappa_oc from for its own
+! copy -- this is not a naming accident: build-namelist writes a single
+! &zmconv_nl ... / block into atm_in containing kappa_so4/kappa_oc
+! (namelist_definition.xml registers each once, group="zmconv_nl"), and
+! both this file and zm_conv_intr.F90 independently declare their own
+! local `namelist /zmconv_nl/` and read that same block. A Fortran namelist
+! read errors out if the input group contains any name not present in the
+! reading statement's own namelist declaration, so this local declaration
+! must mirror the FULL set of names zm_conv_intr.F90 puts in the group
+! (zm_conv_intr.F90:197-201), not just the two variables this file uses --
+! the rest are read into throwaway locals and discarded. Avoids adding a
+! new ndrop.F90<->zm_conv_intr.F90 module dependency (zm_conv_intr.F90
+! already reads zmconv_nl for its own parameters; microp_aero.F90 was the
+! more semantically-obvious home but already `use ndrop`, so ndrop.F90
+! using it back would be circular).
 ! Called from chemistry.F90's chem_readnl, parallel to srf_emis_scale_readnl.
 !===============================================================================
 subroutine ndrop_readnl(nlfile)
@@ -143,7 +158,22 @@ subroutine ndrop_readnl(nlfile)
    integer :: unitn, ierr
    character(len=*), parameter :: subname = 'ndrop_readnl'
 
-   namelist /zmconv_nl/ kappa_so4
+   ! Discarded after the read; present only so the local namelist statement
+   ! below matches every name zm_conv_intr.F90 puts in the &zmconv_nl block
+   ! (namelist matching is by identifier name, so these must be named
+   ! identically to their zm_conv_intr.F90 counterparts, not just typed the
+   ! same).
+   real(r8) :: zmconv_c0_lnd, zmconv_c0_ocn, zmconv_ke, &
+               zmconv_ke_lnd, zmconv_momcu, zmconv_momcd, &
+               zmconv_tiedke_add, zmconv_capelmt, zmconv_dmpdz
+   integer  :: zmconv_num_cin
+   logical  :: zmconv_org, zmconv_microp
+
+   namelist /zmconv_nl/ zmconv_c0_lnd, zmconv_c0_ocn, zmconv_num_cin, &
+                        zmconv_ke, zmconv_ke_lnd, zmconv_org, &
+                        zmconv_momcu, zmconv_momcd, zmconv_microp, &
+                        zmconv_tiedke_add, zmconv_capelmt, zmconv_dmpdz, &
+                        kappa_so4, kappa_oc
 
    if (masterproc) then
       unitn = getunit()
@@ -161,6 +191,7 @@ subroutine ndrop_readnl(nlfile)
 
 #ifdef SPMD
    call mpibcast(kappa_so4, 1, mpir8, 0, mpicom)
+   call mpibcast(kappa_oc,  1, mpir8, 0, mpicom)
 #endif
 
 end subroutine ndrop_readnl
@@ -2017,7 +2048,8 @@ subroutine loadaer( &
    real(r8), pointer :: raer(:,:) ! interstitial aerosol mass, number mixing ratios
    real(r8), pointer :: qqcw(:,:) ! cloud-borne aerosol mass, number mixing ratios
    real(r8) :: specdens, spechygro
-   character(len=20) :: specname  ! MMPPE: for the kappa_so4 override below
+   character(len=20) :: specname  ! MMPPE: for the kappa_so4/kappa_oc override below
+   character(len=32) :: spectype  ! MMPPE: ditto -- species type, not mode/species name
 
    real(r8) :: vol(pcols) ! aerosol volume mixing ratio
    integer  :: i, l
@@ -2035,13 +2067,21 @@ subroutine loadaer( &
       call rad_cnst_get_aer_mmr(0, m, l, 'a', state, pbuf, raer)
       call rad_cnst_get_aer_mmr(0, m, l, 'c', state, pbuf, qqcw)
       call rad_cnst_get_aer_props(0, m, l, density_aer=specdens, hygro_aer=spechygro, &
-                                  aername=specname)
+                                  aername=specname, spectype=spectype)
 
-      ! MMPPE: kappa_so4 absolute override -- see the module-level comment
-      ! above this variable's declaration.
+      ! MMPPE: kappa_so4/kappa_oc absolute overrides -- see the
+      ! module-level comment above these variables' declarations. Matched
+      ! by species TYPE (not mode/species name) to match kgohil's
+      ! mods_mmppe.camdev.001/aerosol_state_mod.F90 reference
+      ! implementation.
       if (kappa_so4 >= 0._r8) then
-         if (trim(specname) == 'so4_a1' .or. trim(specname) == 'so4_a2') then
+         if (trim(spectype) == 'sulfate' .or. trim(spectype) == 'ammonium') then
             spechygro = kappa_so4
+         end if
+      end if
+      if (kappa_oc >= 0._r8) then
+         if (trim(spectype) == 's-organic') then
+            spechygro = kappa_oc
          end if
       end if
 

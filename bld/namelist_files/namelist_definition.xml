@@ -2953,14 +2953,39 @@ Default: -1.0e-3 m-1
 <entry id="kappa_so4" type="real" category="conv"
        group="zmconv_nl" valid_values="" >
 PPE-tunable absolute override for SO4 aerosol hygroscopicity (kappa),
-applied to both SO4-bearing MAM4 modes (accumulation, aitken) in both the
+applied wherever a sulfate or ammonium species appears in both the
 stratiform (ndrop.F90) and ZM convective (zm_conv_intr.F90) activation
 paths. A sentinel of -1 (physically impossible for a hygroscopicity
 parameter) means "leave the physprop-table value unchanged" -- the
-default. Any value >= 0 replaces (not scales) SO4's hygroscopicity.
+default. Any value >= 0 replaces (not scales) the matching species'
+hygroscopicity.
 Registered under group="zmconv_nl" for build-namelist purposes only
 (there is no other natural single home -- see the MMPPE comments in
 ndrop.F90 and zm_conv_intr.F90 for why); it is not a ZM convection
+parameter.
+CHANGED 2026-08-07: previously matched by hardcoded MAM4 mode/species name
+(so4_a1, so4_a2 only); now matches by species type ('sulfate', 'ammonium')
+instead, for consistency with kgohil's
+mods_mmppe.camdev.001/aerosol_state_mod.F90 reference implementation. See
+kappa_oc (added at the same time, same reference implementation) for the
+matching secondary-organic override.
+Default: -1 (no override)
+</entry>
+
+<entry id="kappa_oc" type="real" category="conv"
+       group="zmconv_nl" valid_values="" >
+PPE-tunable absolute override for secondary-organic (SOA, spectype
+'s-organic') aerosol hygroscopicity (kappa), applied in both the
+stratiform (ndrop.F90) and ZM convective (zm_conv_intr.F90) activation
+paths -- the SOA counterpart to kappa_so4 (see that entry), added at the
+same time (2026-08-07) for consistency with kgohil's
+mods_mmppe.camdev.001/aerosol_state_mod.F90 reference implementation,
+which implements both together. A sentinel of -1 (physically impossible
+for a hygroscopicity parameter) means "leave the physprop-table value
+unchanged" -- the default. Any value >= 0 replaces (not scales) s-organic
+species' hygroscopicity.
+Registered under group="zmconv_nl" alongside kappa_so4 for the same
+build-namelist reasons (see kappa_so4's entry); it is not a ZM convection
 parameter.
 Default: -1 (no override)
 </entry>
@@ -6520,6 +6545,16 @@ Default: none
 If true fire emissions are input into atmosphere as elevated forcings.
 Otherwise they are treated as surface emissions.
 Default: TRUE
+</entry>
+
+<entry id="emi_cmr_bb" type="real" category="Fire_emissions"
+       group="fire_emis_ppe_nl" valid_values="" >
+PPE-tunable emitted particle diameter (volume-mean) for primary BC/OM aerosol
+number emissions from biomass-burning (fire) sources, in nanometers. Only
+affects the "elevated" fire-forcing path (fire_emis_elevated=.true.), which
+derives the fire number-emission flux online from the mass flux using this
+assumed particle size.
+Default: 134 (nm)
 </entry>
 
 <entry id="ndep_list" type="char*16(2)" category="Nitrogen Deposition"

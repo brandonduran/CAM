@@ -1378,6 +1378,9 @@
 <srf_emis_scale_oc_bb    >1.D0</srf_emis_scale_oc_bb>
 <srf_emis_scale_dms      >1.D0</srf_emis_scale_dms>
 
+<!-- ppe: fire (biomass-burning) emitted particle diameter, nm -->
+<emi_cmr_bb              >134.D0</emi_cmr_bb>
+
 <!-- dust emission tuning factor -->
 <dust_emis_fact                                                         >0.37D0</dust_emis_fact>
 <dust_emis_fact                            phys="cam5"                  >0.35D0</dust_emis_fact>
@@ -1697,6 +1700,7 @@
 <zmconv_capelmt                                                       > 70.0    </zmconv_capelmt>
 <zmconv_dmpdz                                                         > -1.0e-3 </zmconv_dmpdz>
 <kappa_so4                                                            > -1      </kappa_so4>
+<kappa_oc                                                             > -1      </kappa_oc>
 
 <!-- Cloud sedimentation -->
 

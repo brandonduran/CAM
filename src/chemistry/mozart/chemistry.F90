@@ -341,6 +341,7 @@ end function chem_is
     use aero_model,       only: aero_model_readnl
     use dust_model,       only: dust_readnl
     use mo_srf_emissions, only: srf_emis_scale_readnl
+    use fire_emissions,   only: fire_emissions_readnl
     use ndrop,            only: ndrop_readnl
     use gas_wetdep_opts,  only: gas_wetdep_readnl
     use mo_drydep,        only: drydep_srf_file
@@ -613,6 +614,7 @@ end function chem_is
    call aero_model_readnl(nlfile)
    call dust_readnl(nlfile)
    call srf_emis_scale_readnl(nlfile)
+   call fire_emissions_readnl(nlfile)
    call ndrop_readnl(nlfile)
 !
    call gas_wetdep_readnl(nlfile)

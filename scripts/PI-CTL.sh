@@ -5,20 +5,20 @@ script_name=OAT.sh
 # ==============================================================================
 # MMPPE control run (CTL): 3-month spin-up ending July 31 2025, from which
 # the OAT parameter_L/parameter_H 5-day runs will branch (see
-# MMPPE-info/MMPPE.md "One-At-a-Time Test" section).
+# MMPPE-info/MMPPE.md "One-At-a-Time Test" and MMPPE-info/OAT-READ.md).
 # Modeled on the ~/LaunchScripts/wildfires/*.txt pattern (PDstandard.txt /
 # wildfiresPIwNL.txt), adapted for this clean-CAM/MMPPE-ACI setup.
 # ==============================================================================
 
 ##### USER CHANGE ################################################
-EXP="MMPPE_OAT_CTL"
+EXP="MMPPE_PI_CTL"
 
-# clean-CAM's own Externals.cfg defines [cam] local_path="." -- this
-# checkout IS the top-level CESM sandbox (cime/clm/cice/cism/mosart/rtm/ww3
-# are all checked out as siblings under it via manage_externals), unlike
-# the wildfires scripts' pattern of a separate CESM checkout with CAM
-# wired in as an external. No separate checkout is needed; verified clean
-# (checkout_externals -S) 2026-08-07.
+# TODO (not yet decided): which CIME checkout has clean-CAM wired in as its
+# 'cam' external? SCRIPTDIR must point at that checkout's cime/scripts dir
+# before this script will run -- see the wildfires scripts for the pattern
+# (each of those points at a DIFFERENT cime checkout, e.g.
+# /glade/work/bduran/cam-for-wildfires/cime/scripts); none of them already
+# point at clean-CAM, so this needs to be set up or identified first.
 SCRIPTDIR="/glade/work/bduran/clean-CAM/cime/scripts"
 
 COMPSET="F2000climo"
@@ -29,11 +29,11 @@ PROJECTCODE="UCSD0085"
 SUBMIT="true"
 BUILD="true"
 PREVIEW="true"
-EMAIL="bmduran@ucsd.edu"  # confirmed correct by bduran 2026-08-07
+EMAIL="bmduran@ucsd.edu"  # matches the wildfires scripts' convention; change if wrong
 ##################################################################
 
 if [[ -z "$SCRIPTDIR" || -z "$COMPSET" ]]; then
-    echo "ERROR: SCRIPTDIR and COMPSET must be set before running this script."
+    echo "ERROR: SCRIPTDIR and COMPSET must be set before running this script -- see the TODO comments above."
     exit 1
 fi
 
@@ -69,13 +69,12 @@ cd $CASEROOT
 
 # For control run spin up of 3 months, to end at July 31st
 # Then branch for 5 days for OAT, will have in future scripts
-./xmlchange RUN_STARTDATE=2025-05-01
+./xmlchange RUN_STARTDATE=2024-07-01
 ./xmlchange STOP_N=3
 ./xmlchange STOP_OPTION=nmonths
 ./xmlchange REST_N=3
 ./xmlchange REST_OPTION=nmonths
-./xmlchange RESUBMIT=0
-./xmlchange JOB_WALLCLOCK_TIME=01:45:00 --subgroup case.run
+./xmlchange RESUBMIT=5
 
 # SST/sea-ice forcing: our own ERA5-derived, f09-regridded, CAM bndtvs-format
 # boundary dataset (see forcing_datasets/regrid_sst_ice_to_f09.py and
@@ -85,10 +84,11 @@ cd $CASEROOT
 # file, since that was already your choice in the original draft of this
 # script -- the 2025 portion used here is real ERA5 data either way.
 ./xmlchange SSTICE_DATA_FILENAME=/glade/work/bduran/clean-CAM/forcing_datasets/regridded/era5_sst_sic_1999_2027_extended_filled_0.9x1.25.nc
-# SSTICE_YEAR_ALIGN/START/END tell CIME how to index into the multi-year
-# transient SST file above; all three = 2025 for this run.
-./xmlchange SSTICE_YEAR_ALIGN=2025
-./xmlchange SSTICE_YEAR_START=2025
+# TODO: SSTICE_YEAR_ALIGN/START/END tell CIME how to index into a
+# multi-year transient SST file -- almost certainly needed (without them
+# above. Likely values for this run: all three = 2025.
+./xmlchange SSTICE_YEAR_ALIGN=2024
+./xmlchange SSTICE_YEAR_START=2024
 ./xmlchange SSTICE_YEAR_END=2025
 
 ./xmlchange --append CAM_CONFIG_OPTS="-cosp"
@@ -101,7 +101,7 @@ cd $CASEROOT
 ## (MMPPE-info/OAT_variable_mapping.txt documents the field choices;
 ## ppe_changes_incorporated.txt documents the new diagnostic fields it
 ## requests, e.g. ANGSTRM_550_865, CCN7COL, the ACT*_OVL comparison fields).
-cat /glade/work/bduran/clean-CAM/MMPPE-info/user_nl_cam >> user_nl_cam
+cat /glade/work/bduran/clean-CAM/MMPPE-info/user_nl_cam_PI >> user_nl_cam
 
 # Copying this current launch script for record
 cp /glade/work/bduran/clean-CAM/scripts/$script_name $CASEROOT
@@ -142,17 +142,14 @@ cat <<EOF >> $CASEROOT/README.case
 USER NOTE (by $USER  --  $(date))
 ---------------------------------
 
-MMPPE OAT control run (CTL)
+MMPPE PI 3-month control run (CTL)
 
 Compset: $COMPSET
 Resolution: $RES
 Machine: $MACH
 
 Note:
-3-month spin-up (2025-05-01 through 2025-07-31) of the default MMPPE CTL
-state, per MMPPE-info/MMPPE.md's One-At-a-Time Test protocol: "first
-perform a 3-month spin-up of the default CTL run, then initialize all OAT
-runs from this same CTL state." No PPE parameters perturbed in this run.
-History output limited to the OAT "Variables to test" list (see
-MMPPE-info/OAT_variable_mapping.txt, MMPPE-info/user_nl_cam).
+3-month spin-up (2024-07-01 through 2024-09-31) of the PI MMPPE
+state. No PPE parameters perturbed in this run. Resubmit of 5
+to run full extent.
 EOF

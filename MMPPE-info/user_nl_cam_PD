@@ -67,18 +67,18 @@ n2vmr=339.54880e-9
 f11vmr=214.780e-12
 f12vmr=479.925e-12
 
-! nudging
+! nudging - July 1 2024 to Dec 31 2025
 /
 &nudging_nl
  nudge_model=.true.
  nudge_path            = '/glade/campaign/cesm/cesmdata/inputdata/atm/cam/met/nudging/MERRA2_fv09_32L/'
 nudge_file_template   = '%y/MERRA2_fv09.cam2.i.%y-%m-%d-%s.nc'
 nudge_beg_day         = 1
-nudge_beg_month       = 1
-nudge_beg_year        = 2025
+nudge_beg_month       = 7
+nudge_beg_year        = 2024
 nudge_end_day         = 31
-nudge_end_month       = 4
-nudge_end_year        = 2012
+nudge_end_month       = 12
+nudge_end_year        = 2015
 nudge_times_per_day   = 8
 model_times_per_day   = 48
  nudge_ucoef            = 0.25

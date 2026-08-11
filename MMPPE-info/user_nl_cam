@@ -5,7 +5,7 @@
 ! (OAT) parameter_L/parameter_H runs will be initialized from, per
 ! MMPPE-info/MMPPE.md ("One-At-a-Time Test": "first perform a 3-month spin-up
 ! of the default CTL run, then initialize all OAT runs from this same CTL
-! state") and MMPPE-info/OAT-READ.md.
+! state").
 !
 ! Scope: ONLY the CESM/CAM equivalents identified so far for the 14 OAT
 ! "Variables to test" (MMPPE.md, One-At-a-Time Test section) -- see
@@ -36,7 +36,7 @@
 ! From /glade/work/bduran/clean-CAM/forcing_datasets/bc_greenhouse_m_1750_2100.nc
 co2vmr=424.98e-6
 ch4vmr=1967.59e-9
-n2vmr=339.54880e-9
+n2ovmr=339.54880e-9
 f11vmr=214.780e-12
 f12vmr=479.925e-12
 
@@ -49,8 +49,25 @@ f12vmr=479.925e-12
 ! spin-up (and any OAT run that reuses this block) loops it cyclically
 ! rather than running off the end of a single calendar year.
 !
-! srf_emis_specifier targets below use "*_bb_*"-tagged SYMLINKS to the real
-! regridded files, not the real files directly: this branch's
+! GFED ships raw species (BC, OC, SO2, C2H6S); CAM6's MAM4 chemistry needs
+! them re-expressed as bc_a4/pom_a4/SO2/so4_a1/DMS + num_a4/num_a1 (MAM4 has
+! no bare "BC"/"OC" tracer). That conversion -- OC -> pom_a4 = 1.4*OC (OM/OC
+! ratio), SO2 -> {SO2 = 0.975*SO2_raw, so4_a1 = 0.025*SO2_raw} (primary-
+! sulfate split, conserves total biomass-burning sulfur), BC -> bc_a4 and
+! C2H6S -> DMS (rename only, no scaling), plus num_bc_a4/num_pom_a4/
+! num_so4_a1 companion number-emission files -- is done by
+! forcing_datasets/derive_gfed_mam4_speciation.py, which documents every
+! constant/formula in detail (citing
+! /glade/u/home/bduran/multimodel-erfaci/diagnostics/redistribute_emiss_hires.ncl,
+! the ACOM reference script these conventions come from) and writes its
+! output back into forcing_datasets/regridded/. Read that script's
+! docstring before touching any of the GFED-derived filenames below --
+! notably, num_pom_a4 is intentionally derived from RAW (unscaled) OC mass,
+! not the 1.4x pom_a4 mass, which looks like a bug but matches the
+! reference convention exactly (explained there).
+!
+! srf_emis_specifier targets below use "*_bb_*"-tagged SYMLINKS/files for
+! the real regridded/derived files, not un-tagged filenames: this branch's
 ! mo_srf_emissions.F90 (get_srf_emis_ppe_scale) only applies the
 ! emi_bb_bc/emi_bb_oc/emi_bb_so2 PPE scale factors when the emission
 ! filename contains "_bb_" (see ppe_changes_incorporated.txt, 6b). The
@@ -59,7 +76,11 @@ f12vmr=479.925e-12
 ! inert once perturbed in the later OAT runs even though this CTL run
 ! (all scale factors at their default of 1.0) is unaffected either way.
 ! Harmless no-op for THIS file; load-bearing for the emi_bb_bc/oc/so2 OAT
-! parameter_L/H runs that get initialized from this spin-up.
+! parameter_L/H runs that get initialized from this spin-up. so4_a1/num_a1
+! have no PPE scale-factor case in get_srf_emis_ppe_scale() at all (same as
+! the CEDS anthro so4_a1/num_a1 entries further below), so the "_bb_" tag is
+! moot for them specifically -- included anyway for naming consistency with
+! the rest of this file set.
 !
 ! UNITS FIX: the regridded GFED/BB4CMIP7 files carry units="kg m-2 s-1"
 ! (CF/input4MIPs convention), which did NOT match mo_srf_emissions.F90's
@@ -69,42 +90,290 @@ f12vmr=479.925e-12
 ! ~zero. Fixed by adding "kg m-2 s-1" to mks_units in mo_srf_emissions.F90
 ! directly (so any correctly CF-labeled file works without renaming/
 ! recopying). Re-run case.build after any fresh checkout of this branch to
-! pick up that source change.
+! pick up that source change. This fix also covers the new so4_a1_bb/
+! num_so4_a1_bb files below (same units convention).
 !
-! num_a4 (companion number-emission flux for bc_a4/pom_a4 biomass burning):
-! derived from the GFED BC/OC mass flux files via
-! num_a4_raw = mass_flux_kg_m2_s / (amufac * rho*(pi/6)*diam^3), the same
+! num_a4/num_a1 (companion number-emission flux for bc_a4/pom_a4/so4_a1
+! biomass burning): derived from the GFED BC/OC/so4_a1 mass flux via
+! num_flux = mass_flux_kg_m2_s / (amufac * rho*(pi/6)*diam^3), the same
 ! formula/assumed particle size (diam=0.134e-6 m, matching this branch's
-! fire_emissions.F90 demis_acc constant) as
-! /glade/u/home/emmons/CMIP6/emissions_hist/make_emis_cmip6_mam4num.pro --
-! validated by reproducing the archived emissions-cmip6_num_pom_a4_bb_
-! surface_1750-2015 file's num/mass ratio to ~0.005%. emi_cmr_bb (the PPE
-! knob that would otherwise let CAM derive number from mass at runtime) is
-! still not implemented (ppe_changes_incorporated.txt, 6c), so this is a
-! static, unperturbable number-emission dataset consistent with this CTL
-! run's all-defaults state -- revisit if emi_cmr_bb is ever implemented.
+! fire_emissions.F90 demis_acc constant) as ACOM's
+! redistribute_emiss_hires.ncl (see derive_gfed_mam4_speciation.py
+! docstring for the full derivation and the num_pom_a4 raw-vs-scaled-OC
+! caveat noted above) -- validated by reproducing the pre-existing
+! num_bc_a4_bb/num_pom_a4_bb files' embedded formula constants exactly.
+! emi_cmr_bb (the PPE knob that would otherwise let CAM derive number from
+! mass at runtime) is still not implemented (ppe_changes_incorporated.txt,
+! 6c), so this is a static, unperturbable number-emission dataset
+! consistent with this CTL run's all-defaults state -- revisit if
+! emi_cmr_bb is ever implemented.
+!
+! Anthropogenic surface emissions (CEDS CMIP7, PD/2025 -- per MMPPE.md's
+! anthropogenic emissions requirement). Source: CMIP7 input4MIPs CEDS
+! release at /glade/campaign/acom/MUSICA/emis/cmip7/f09/CEDS-CMIP-2025-04-18
+! (f09, monthly, 1750-2023, molecules cm-2 s-1 -- matches this branch's
+! normal unit-handling path, no fix needed like the regridded GFED files
+! above). srf_emis_type/srf_emis_cycle_yr above (CYCLICAL/2025) apply
+! globally to the whole srf_emis_specifier list, so these files get the
+! same "read year 2025, cycle it" treatment as the bb entries.
+!
+! YEAR MISMATCH, FIXED (2026-08-07): the CEDS-CMIP-2025-04-18 release only
+! actually contains data through 2023-12 (verified via ncdump on every file
+! below -- "date" never exceeds 20231216, despite the "175001-202312"
+! filename-embedded range suggesting otherwise once you'd expect a 2025
+! extension; real CEDS releases run ~2 years behind). srf_emis_cycle_yr=2025
+! against a file with no 2025 "date" record hard-crashes
+! (tracer_data.F90:set_cycle_indices(), 'cycle year not found') -- this
+! would have crashed EVERY anthropogenic-emissions file below (and the two
+! CEDS "ene_vertical" ext_frc entries further down) the moment this CTL run
+! started. Per bduran's request (2026-08-07), all 13 affected CEDS files are
+! now pointed at forcing_datasets/relabeled_2025_climo/ copies in which the
+! last real year (2023) is repeated unchanged as BOTH 2024 and 2025 (24
+! monthly records instead of the source's 3288) -- produced by
+! forcing_datasets/relabel_2025_climo.py's relabel_ceds(), which also
+! documents this in each output file's "history_relabel" attribute. This is
+! a modeling approximation (2023 anthropogenic activity standing in for
+! 2025), not a pure bookkeeping fix like the H2O/contvolcano relabeling
+! below -- flag it as such in any run documentation. Repeating 2024 as well
+! (not just 2025) means these same files will also work unmodified for a
+! future transient SERIAL run spanning 2024-2025 (see the "FUTURE PPE RUNS"
+! note further below), without needing to be regenerated again once real
+! CEDS 2024/2025 data ships.
+!
+! Limited to species where F2000climo's default (2000_cam6.xml) already
+! specifies an "anthro" source and a CEDS CMIP7 file (or pair of files)
+! maps cleanly onto it:
+!   bc_a4, pom_a4              <- single CEDS "-em-anthro" file (all anthro
+!                                  sectors aggregated), 1-to-1 vs. default's
+!                                  single anthro surface file.
+!   num_a4 (x2)                <- ditto, independently-tracked number-
+!                                  emission datasets for bc_a4/pom_a4.
+!   SOAG                       <- CEDS SOAGx1.5-VOC-anthro (see below),
+!                                  matching F2000climo's use of the x1.5-
+!                                  scaled SOAG anthro dataset.
+!   so4_a1, num_a1 (x2)        <- CEDS splits these into a surface component
+!                                  (ag[+ship_slv], matching default's
+!                                  "anthro-ag-ship") and an elevated
+!                                  energy-sector component (ene_vertical,
+!                                  matching default's "anthro-ene" -- see
+!                                  ext_frc_specifier below). num_a1 has two
+!                                  separate CEDS surface files (ag, ship_slv)
+!                                  where CMIP6/default combined them into one.
+!   so4_a2, num_a2              <- CEDS res_trs (Transportation+Residential),
+!                                  matching default's single "anthro-res"
+!                                  surface file.
+!   SO2                         <- CEDS SO2-em-anthro -- SEE CAVEAT BELOW,
+!                                  this one is NOT a clean 1-to-1 map.
+! NH3 was considered and dropped: no default srf_emis entry in 2000_cam6.xml,
+! and not even a solution-class species in this compset's chemistry
+! mechanism (src/chemistry/pp_trop_mam4/chem_mech.in) -- an NH3 emission
+! entry would be a no-op at best.
+!
+! SO2 CAVEAT -- vertical placement changes vs. the default: F2000climo's
+! default splits anthropogenic SO2 into a surface component
+! (anthro-ag-ship-res, srf_emis) and an elevated energy-sector component
+! (anthro-ene, ext_frc), the same way it does for so4_a1/num_a1. CEDS7 does
+! NOT provide that split for SO2 -- SO2-em-anthro is a single file with all
+! anthro sectors (including Energy) already summed into one all-surface
+! field (checked both cmip7/f09/CEDS-CMIP-2025-04-18/ and the sibling
+! .../CEDS-CMIP-2025-04-18_20251124/ release -- identical in this respect,
+! same creation_date, just repackaged with a newer timestamp; the only
+! genuinely new thing in the _20251124 directory is an unrelated
+! "-em-AIR-anthro" aircraft sector for bc_a4/CO/NO2/num_bc_a4/SO2, a 4D
+! altitude-resolved forcing CAM's tracer_data.F90 can actually ingest --
+! it auto-detects an 'altitude'/'altitude_int' km grid as an alternative to
+! the legacy 'lev' hPa convention, ~line 331-377 -- but that's an
+! additional emissions category outside F2000climo's default, not a fix
+! for this gap, and that directory is also missing SOAG/SOAGx1.5 entirely;
+! left out of this round by request).
+!
+! Given no CEDS7 release splits SO2 by sector, wired the whole
+! SO2-em-anthro file into srf_emis_specifier below (energy-sector SO2 now
+! emitted at the surface instead of aloft, unlike so4_a1/num_a1's ene_
+! vertical component in ext_frc_specifier) rather than leave anthropogenic
+! SO2 out entirely.
+!
+! SOAG file choice: CEDS provides two SOAGx1.5-VOC-anthro files with
+! identical data_creator/creation_date (20260122) but the un-suffixed one
+! (...supplemental_gn_175001-202312.nc) has NO "date" variable, only a raw
+! CF "time" coordinate -- tracer_data.F90's open_trc_datafile()/
+! set_cycle_indices() unconditionally look up a variable literally named
+! "date" (YYYYMMDD int) to do CYCLICAL year-matching, so that file would
+! fail to load. The "_c20260122" suffixed twin has the required "date"
+! variable added and is what's used below. Checked (ncdump -h, grep
+! "date(time)") that every other CEDS file referenced in this namelist has
+! it too before wiring each one in.
+!
+! PPE note: get_srf_emis_ppe_scale() (mo_srf_emissions.F90) matches the
+! emi_anthro_bc/emi_anthro_oc/emi_anthro_so2 scale-factor knobs by looking
+! for the literal substring "anthro" in the filename (and, for num_a4, also
+! "bc_a4" or "pom_a4" to pick the right parent-species scale) -- these CEDS
+! filenames satisfy both naturally, no renaming/symlinking needed here
+! (unlike the "_bb_" tag required for the GFED biomass-burning files
+! above). This applies to the new SO2-em-anthro entry too: SO2 already had
+! a PPE scale case (srf_emis_scale_so2_ant/so2_bb) for the bb entry above,
+! so the anthro entry picks up srf_emis_scale_so2_ant automatically --
+! meaning that knob will now perturb the FULL anthropogenic SO2 field
+! (including the energy-sector portion that's normally split out via
+! ext_frc for so4_a1/num_a1), not just a surface-only subset, per the
+! caveat above. so4_a1, so4_a2, num_a1, num_a2, and SOAG have no PPE
+! scale-factor case in get_srf_emis_ppe_scale() at all, so this is moot for
+! them (scale stays at its default of 1.0 regardless of filename).
+!
+! Prescribed ozone (CMIP7 ScenarioMIP "vl", PD/2025 -- per MMPPE.md).
+! prescribed_ozone_* below (in &chem_inparm) replaces F2000climo's default
+! (2000_cam6.xml's ozone_strataero_CAM6chem_2000climo_zm_5day_c171004.nc).
+! That default file is CAM history output repurposed as a zonal-mean,
+! hybrid-sigma-pressure prescribed_ozone/prescribed_strataero source; the
+! reader only actually needs O3(time,lev,lat) + date (no lon, no PS/hyam/
+! hybm required -- see forcing_datasets/reformat_ozone_zonal_mean.py's
+! docstring for the full derivation of what tracer_data.F90 requires).
+!
+! The regridded CEDS/ScenarioMIP ozone file has vertical dim "plev"
+! (descending, pure pressure, 4D with lon) -- this branch's tracer_data.F90
+! hardcodes a lookup for a dimension literally named "lev" (ascending), so
+! it can't be used directly. forcing_datasets/reformat_ozone_zonal_mean.py
+! zonal-averages over lon, reverses+renames plev->lev, renames vmro3->O3
+! (units set to the exact string "mol/mol" -- the source's CF "mole mole-1"
+! is not one of the unit strings prescribed_ozone_adv() recognizes and
+! would hard-error at runtime), and adds the date/datesec variables
+! open_trc_datafile() requires (derived from the source's CF time
+! coordinate; not present in the source file). Output:
+! forcing_datasets/regridded/ozone_zm_input4MIPs_ScenarioMIP_FZJ-CMIP-
+! ozone-vl-1-0_0.9x1.25_202401-202612.nc.
+!
+! CYCLICAL/cycle_yr=2025 below matches every other forcing source in this
+! file (GHG, GFED, CEDS anthro, ext_frc, nudging) -- all PD/2025-
+! representative for the CTL spin-up and OAT runs. The output file covers
+! 2024-01 through 2026-12 (all 36 months kept, not trimmed to 2025 alone --
+! same PD_WINDOW buffer rationale as the other CEDS/GFED files in this set)
+! but only the 2025 slice is ever looked up under CYCLICAL.
+!
+! FUTURE PPE RUNS, NOT THIS FILE: transient PPE runs starting in 2024 and
+! running through 2025 will need prescribed_ozone_type='SERIAL' instead of
+! 'CYCLICAL' (and probably drop prescribed_ozone_cycle_yr entirely) so CAM
+! reads forward through the real 2024-2026 monthly data rather than
+! re-cycling one year -- per bduran's request (2026-08-06), left as a
+! future change, not implemented here.
 !
 ! NOT YET INCLUDED (known gaps, not resolved this round):
-!   - CEDS anthropogenic emissions -- not yet regridded/available in
-!     forcing_datasets/regridded/; anthropogenic srf_emis wiring is left
-!     on whatever this case's default namelist provides.
-!   - Ozone (CMIP7 ScenarioMIP "vl") and SST/SIC (ERA5 2025) forcing:
-!     deferred this round. The regridded ozone file's vertical dimension
-!     is named "plev", but this branch's tracer_data.F90 hardcodes a
-!     lookup for a dimension literally named "lev" -- needs a rename (or a
-!     regridding-pipeline fix) before prescribed_ozone_nl can use it.
-!     SST/SIC is a data-ocean/ice (user_nl_docn/SSTICE_DATA_FILENAME)
-!     setting, not a user_nl_cam one, and is out of scope for this file.
+!   - Aircraft ("AIR"-sector) emissions -- see SO2 caveat above.
+!   - SST/SIC (ERA5 2025) forcing: a data-ocean/ice
+!     (user_nl_docn/SSTICE_DATA_FILENAME) setting, not a user_nl_cam one,
+!     and out of scope for this file.
+!-------------------------------------------------------------------------------
+!
+! Elevated (ext_frc) emissions (see ext_frc_specifier below). Was previously
+! left unset here (so this case ran on 2000_cam6.xml's full CMIP6 default:
+! H2O CH4-oxidation source + num_a1/so4_a1 anthro-ene (elevated energy-
+! sector) + 5 contvolcano (continuous volcanic SO2/sulfate) lines, all at
+! cycle_yr=2000). Now overridden to swap the anthro-ene lines for their
+! CEDS CMIP7 "ene_vertical" equivalents (matching the so4_a1/num_a1
+! srf_emis CEDS swap below); H2O is carried forward from the same 2000climo
+! source as the default, but the 5 contvolcano lines are sourced from 1850
+! conditions instead of 2000 (see below), per bduran's request.
+!
+! ext_frc_specifier is a single global list -- setting it here REPLACES the
+! full use_case default, it does not append to it. Omitting the H2O/
+! contvolcano lines would silently drop CH4-oxidation water vapor and
+! volcanic SO2/sulfate forcing from the run, so they're carried forward
+! explicitly below.
+!
+! CONTVOLCANO SOURCE -- 1850, not 2000: the 5 contvolcano lines below (num_a1/
+! num_a2/SO2/so4_a1/so4_a2) are sourced from year 1850 of
+! .../CMIP6_emissions_1750_2015/emissions-cmip6_*_contvolcano_vertical_850-5000_...
+! -- the exact same files namelist_defaults_cam.xml's ver="cam6" default
+! points at (so2_cv_ext_file etc., ~line 758-762), i.e. what CESM's own
+! official 1850_cam6.xml use case uses for continuous-volcano forcing, NOT
+! the "2000climo" files 2000_cam6.xml (F2000climo's default) points at. Per
+! bduran's request (2026-08-06): use 1850 (CMIP6 preindustrial/background)
+! volcanic conditions for this run rather than year-2000 conditions -- "that
+! is what is done in CMIP6". The "_850-5000_" files aren't a continuous
+! transient record despite the name: each holds exactly 7 embedded 12-month
+! climatological blocks (years 850, 1850, 1960, 2000, 2005, 2010, 5000);
+! 1850's block is real source data, sliced out (not extrapolated) before
+! relabeling. See forcing_datasets/relabel_2025_climo.py's docstring for
+! the full derivation.
+!
+! YEAR MISMATCH / RELABELED FILES: ext_frc_type/ext_frc_cycle_yr are global
+! scalars applied to every file in ext_frc_specifier (same architecture as
+! srf_emis above) -- tracer_data.F90's set_cycle_indices() hard-errors
+! (call endrun('cycle year not found')) if the requested cycle_yr isn't
+! present in a file's "date" variable. Neither the H2O 2000climo file nor
+! the volcano files' 1850 block contain a 2025 date -- so ext_frc_cycle_yr=
+! 2025 (wanted for the CEDS files, to match srf_emis_cycle_yr above) would
+! crash on them as-is.
+!
+! Fixed by making local copies with ONLY the "date" variable's year shifted
+! to 2025 (H2O: 2000->2025, date+250000; contvolcano: 1850->2025, date+
+! 1750000; all other data byte-identical to the source -- verified via
+! netCDF4 max-abs-diff: 0.0, both for H2O's CH4_CHML field and the volcano
+! files' contvolcano/PS fields against the source's own 1850 block). This is
+! safe because tracer_data.F90 builds its internal time axis purely from
+! "date"/"datesec" (see open_trc_datafile(), ~line 1925-1929) and never
+! reads the files' own CF "time" coordinate for this purpose -- so
+! relabeling "date" alone is sufficient, and "time" is left as the source's
+! original values (not reset to start at record 0) for both categories.
+!   - Script:  forcing_datasets/relabel_2025_climo.py
+!   - Output:  forcing_datasets/relabeled_2025_climo/  (6 files: H2O +
+!              5 contvolcano; num_a1/so4_a1 anthro-ene were dropped instead
+!              of relabeled since CEDS already replaces them)
+!   - Each output file carries a "history_relabel" global attribute noting
+!     the shift/slice and the reason.
+!
+! Both srf_emis_* and ext_frc_* live in this one &chem_inparm block
+! deliberately -- Fortran namelists don't reliably support the same group
+! name appearing twice in one file, so everything chem_inparm-related for
+! this case is kept in a single group below.
 !-------------------------------------------------------------------------------
 &chem_inparm
  srf_emis_type      = 'CYCLICAL'
  srf_emis_cycle_yr  = 2025
  srf_emis_specifier = 'bc_a4  -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_BC_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
-      'pom_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_OC_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'pom_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_pom_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
       'SO2    -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_SO2_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
       'DMS    -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_C2H6S_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
       'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_bc_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
-      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_pom_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc'
+      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_pom_a4_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'so4_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_so4_a1_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'num_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/regridded/emiss_GFED_NRT_num_so4_a1_bb_wildfire_2025_r1440x720_0.9x1.25_202501-202512.nc',
+      'bc_a4  -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/bc_a4-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'pom_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/pom_a4-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_bc_a4-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a4 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_pom_a4-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'SOAG   -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/SOAGx1.5-VOC-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18-supplemental_gn_2024-2025climo_c20260122.nc',
+      'so4_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/so4_a1_ag_ship_slv-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'so4_a2 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/so4_a2_res_trs-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_so4_a1_ag-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_so4_a1_ship_slv-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a2 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_so4_a2_res_trs-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'SO2    -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/SO2-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc'
+ ext_frc_type      = 'CYCLICAL'
+ ext_frc_cycle_yr  = 2025
+ ext_frc_specifier = 'H2O    -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/H2O_emission_CH4_oxidationx2_elev_3Dmonthly_L70_2025climo_c180511.nc',
+      'num_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/num_so4_a1_ene_vertical-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'num_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/emissions-cmip6_num_a1_so4_contvolcano_vertical_1850to2025climo_0.9x1.25_c20170724.nc',
+      'num_a2 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/emissions-cmip6_num_a2_so4_contvolcano_vertical_1850to2025climo_0.9x1.25_c20170724.nc',
+      'SO2    -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/emissions-cmip6_SO2_contvolcano_vertical_1850to2025climo_0.9x1.25_c20170724.nc',
+      'so4_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/so4_a1_ene_vertical-em-anthro_input4MIPs_emissions_CMIP_CEDS-CMIP-2025-04-18_gn_2024-2025climo.nc',
+      'so4_a1 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/emissions-cmip6_so4_a1_contvolcano_vertical_1850to2025climo_0.9x1.25_c20170724.nc',
+      'so4_a2 -> /glade/work/bduran/clean-CAM/forcing_datasets/relabeled_2025_climo/emissions-cmip6_so4_a2_contvolcano_vertical_1850to2025climo_0.9x1.25_c20170724.nc'
+/
+
+! Prescribed ozone (CMIP7 ScenarioMIP "vl", PD/2025) -- replaces
+! F2000climo's default ozone_strataero_CAM6chem_2000climo_zm_5day_c171004.nc
+! (2000_cam6.xml). See the longer comment block above (near "Prescribed
+! ozone (CMIP7 ScenarioMIP "vl"...") for the full derivation. This is its
+! own &prescribed_ozone_nl group, not part of &chem_inparm -- see
+! prescribed_ozone.F90's "namelist /prescribed_ozone_nl/" and
+! bld/namelist_files/namelist_definition.xml's group="prescribed_ozone_nl".
+! prescribed_ozone_name is left at its default ('O3'), which already
+! matches the O3 variable name in the file below.
+&prescribed_ozone_nl
+ prescribed_ozone_type     = 'CYCLICAL'
+ prescribed_ozone_datapath = '/glade/work/bduran/clean-CAM/forcing_datasets/regridded/'
+ prescribed_ozone_cycle_yr = 2025
+ prescribed_ozone_file     = 'ozone_zm_input4MIPs_ScenarioMIP_FZJ-CMIP-ozone-vl-1-0_0.9x1.25_202401-202612.nc'
 /
 
 &nudging_nl
@@ -115,7 +384,7 @@ nudge_beg_day         = 1
 nudge_beg_month       = 5
 nudge_beg_year        = 2025
 nudge_end_day         = 31
-nudge_end_month       = 4
+nudge_end_month       = 12
 nudge_end_year        = 2025
 nudge_times_per_day   = 8
 model_times_per_day   = 48

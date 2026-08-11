@@ -75,13 +75,21 @@ module zm_conv_intr
    real(r8) :: zmconv_tiedke_add = unset_r8   ! Convective parcel temperature perturbation
    real(r8) :: zmconv_capelmt = unset_r8      ! Triggering thereshold for ZM convection
    real(r8) :: zmconv_dmpdz = unset_r8        ! Parcel fractional mass entrainment rate (/m)
-   ! MMPPE: kappa_so4 absolute override for SO4 hygroscopicity (ZM's own,
-   ! separate aerosol-activation path -- see the matching, more detailed
-   ! comment in ndrop.F90 above its own copy of this variable, and above
-   ! ndrop_readnl, for why the same namelist group/variable name is
-   ! independently declared+read in both files rather than shared via a
+   ! MMPPE: kappa_so4/kappa_oc absolute overrides for SO4/SOA hygroscopicity
+   ! (ZM's own, separate aerosol-activation path -- see the matching, more
+   ! detailed comment in ndrop.F90 above its own copy of these variables,
+   ! and above ndrop_readnl, for why the same namelist group/variable names
+   ! are independently declared+read in both files rather than shared via a
    ! module dependency). Default -1 (sentinel) = unchanged behavior.
+   !
+   ! CHANGED 2026-08-07: matching reworked from hardcoded MAM4 mode/species
+   ! name (so4_a1, so4_a2) to species TYPE ('sulfate'/'ammonium' ->
+   ! kappa_so4, 's-organic' -> kappa_oc), and kappa_oc added, to match
+   ! ndrop.F90's rework -- see that file's module-level comment for the
+   ! full rationale (kgohil's mods_mmppe.camdev.001/aerosol_state_mod.F90
+   ! reference implementation).
    real(r8) :: kappa_so4 = -1._r8
+   real(r8) :: kappa_oc  = -1._r8
 
 
 !  indices for fields in the physics buffer
@@ -190,7 +198,7 @@ subroutine zm_conv_readnl(nlfile)
                         zmconv_ke, zmconv_ke_lnd, zmconv_org, &
                         zmconv_momcu, zmconv_momcd, zmconv_microp, &
                         zmconv_tiedke_add, zmconv_capelmt, zmconv_dmpdz, &
-                        kappa_so4
+                        kappa_so4, kappa_oc
    !-----------------------------------------------------------------------------
 
    if (masterproc) then
@@ -235,6 +243,8 @@ subroutine zm_conv_readnl(nlfile)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: zmconv_dmpdz")
    call mpi_bcast(kappa_so4,                1, mpi_real8, masterprocid, mpicom, ierr)
    if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: kappa_so4")
+   call mpi_bcast(kappa_oc,                 1, mpi_real8, masterprocid, mpicom, ierr)
+   if (ierr /= 0) call endrun("zm_conv_readnl: FATAL: mpi_bcast: kappa_oc")
 
 end subroutine zm_conv_readnl
 
@@ -1154,7 +1164,8 @@ subroutine zm_conv_micro_init()
     integer :: nspecmx   ! max number of species in a mode
 
     character(len=20), allocatable :: aername(:)
-    character(len=20) :: specname_l  ! MMPPE: for the kappa_so4 override below
+    character(len=20) :: specname_l  ! MMPPE: for the kappa_so4/kappa_oc override below
+    character(len=32) :: spectype_l  ! MMPPE: ditto -- species type, not mode/species name
     character(len=32) :: str32
     character(len=*), parameter :: routine = 'zm_conv_init'
 
@@ -1245,14 +1256,23 @@ subroutine zm_conv_micro_init()
              ! Properties of modal species
              do l = 1, aero%nspec(m)
                 call rad_cnst_get_aer_props(0, m, l, density_aer=aero%specdens(l,m), &
-                   hygro_aer=aero%spechygro(l,m), aername=specname_l)
+                   hygro_aer=aero%spechygro(l,m), aername=specname_l, spectype=spectype_l)
 
-                ! MMPPE: kappa_so4 absolute override -- see the module-level
-                ! comment above this file's kappa_so4 declaration, and the
-                ! fuller comment in ndrop.F90 (the primary activation path).
+                ! MMPPE: kappa_so4/kappa_oc absolute overrides -- see the
+                ! module-level comment above this file's kappa_so4/kappa_oc
+                ! declarations, and the fuller comment in ndrop.F90 (the
+                ! primary activation path). Matched by species TYPE (not
+                ! mode/species name) to match kgohil's
+                ! mods_mmppe.camdev.001/aerosol_state_mod.F90 reference
+                ! implementation.
                 if (kappa_so4 >= 0._r8) then
-                   if (trim(specname_l) == 'so4_a1' .or. trim(specname_l) == 'so4_a2') then
+                   if (trim(spectype_l) == 'sulfate' .or. trim(spectype_l) == 'ammonium') then
                       aero%spechygro(l,m) = kappa_so4
+                   end if
+                end if
+                if (kappa_oc >= 0._r8) then
+                   if (trim(spectype_l) == 's-organic') then
+                      aero%spechygro(l,m) = kappa_oc
                    end if
                 end if
              end do

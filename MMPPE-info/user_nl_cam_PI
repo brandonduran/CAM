@@ -1,0 +1,404 @@
+!===============================================================================
+! user_nl_cam_PIPD -- MMPPE PI (1850) / PD (2025) production-run history output
+!===============================================================================
+! Purpose: history-output configuration for the actual MMPPE PI and PD
+! experiments (MMPPE-info/MMPPE.md, "PPE Experiments" table), as opposed to
+! MMPPE-info/user_nl_cam, which is the CTL spin-up file scoped ONLY to the 14
+! One-At-a-Time "Variables to test". This file targets the full "Model Output
+! Variables" tables (6-hourly Instantaneous, 6-hourly Instantaneous (optional),
+! Monthly Mean).
+!
+! PI and PD differ only in emissions/nudging-target-year/forcing inputs (see
+! MMPPE.md's "PPE Experiments" table) -- NOT in what gets written to history.
+! This same file is intended to be used verbatim for both the PI and PD cases
+! (and for the 1-year CTL/PPE spin-ups feeding into them); only the forcing/
+! emissions/compset configuration (not covered here -- out of scope per this
+! file's purpose) should differ between the two. Nudging setup (ERA5 winds,
+! ~6hr relaxation above ~2km) is also out of scope here; it lives in its own
+! namelist block (nudging_nl) and was intentionally not addressed by this file.
+!
+! Field derivation: full match/derivation notes for every field below are in
+! MMPPE-info/6hourly_variable_mapping.txt and
+! MMPPE-info/monthly_mean_variable_mapping.txt -- read those first; this file
+! only summarizes the CESM field name(s) chosen per MMPPE variable. MATCH
+! quality codes (EXACT/CLOSE/APPROX/DERIVED/NONE-BEST) are as defined there.
+!
+! Scope decisions made when building this file (see conversation that
+! produced it -- flagging here since they materially affect run cost/output):
+!   1. COSP/MODIS optional table: INCLUDED, on its own history tape (h1),
+!      since MMPPE.md calls COSP "highly desirable for models with COSP".
+!      Requires the case to be configured with -cosp (and the MODIS
+!      simulator sub-package on) at CARBON/build time -- this user_nl_cam
+!      alone does not turn COSP on. If COSP is not actually enabled for a
+!      given case, fincl2/nhtfrq(2)/mfilt(2) below will just produce empty/
+!      missing output and should be commented out.
+!   2. Aerosol-free TOA fluxes (rsut_na/rsutcs_na/rlut_na/rlutcs_na):
+!      INCLUDED, via a diagnostic ("double-call") radiation calculation
+!      configured through rad_diag_1 below (see that section's own notes --
+!      it is adapted from the working example in
+!      test/system/nl_files/rad_diag_mam, with all aerosol mode entries
+!      dropped rather than substituted, since the analogous MMPPE fields ask
+!      for a truly aerosol-free flux, not a partially-aerosol-free one).
+!   3. Fields with no native CESM field and no reasonable post-processing
+!      derivation ("NONE-BEST" with no formula given in the mapping files):
+!      OMITTED from fincl (they cannot be requested -- there is no addfld
+!      name for them) and instead listed in the "NOT AVAILABLE" comment
+!      block at the end of this file, so nothing is silently dropped from
+!      the MMPPE variable list without a record of why.
+!   4. DERIVED fields that are sums across aerosol modes/species (e.g. SO4 =
+!      so4_a1+so4_a2+so4_a3) or unit conversions (e.g. DMS mol/mol ->
+!      kg/kg): the INDIVIDUAL per-mode/native-unit component fields are
+!      included in fincl so the sum/conversion can be done in
+!      post-processing; CAM history cannot do runtime arithmetic across
+!      fields.
+!
+! NOT FINAL: MMPPE.md itself says "the output list and variable names are
+! still being finalised" -- treat this file as a first production-ready pass
+! against the CURRENT protocol text, not a frozen spec. Re-check against
+! MMPPE.md and the two mapping .txt files before a real PI/PD submission run.
+!===============================================================================
+
+! greenhouse gases (2025 values)
+! /glade/u/home/bduran/multimodel-erfaci/establish-2025-ghg-values.ipynb
+! From /glade/work/bduran/clean-CAM/forcing_datasets/bc_greenhouse_m_1750_2100.nc
+co2vmr=424.98e-6
+ch4vmr=1967.59e-9
+n2vmr=339.54880e-9
+f11vmr=214.780e-12
+f12vmr=479.925e-12
+
+! nudging - July 1 2024 to Dec 31 2025
+/
+&nudging_nl
+ nudge_model=.true.
+ nudge_path            = '/glade/campaign/cesm/cesmdata/inputdata/atm/cam/met/nudging/MERRA2_fv09_32L/'
+nudge_file_template   = '%y/MERRA2_fv09.cam2.i.%y-%m-%d-%s.nc'
+nudge_beg_day         = 1
+nudge_beg_month       = 7
+nudge_beg_year        = 2024
+nudge_end_day         = 31
+nudge_end_month       = 12
+nudge_end_year        = 2015
+nudge_times_per_day   = 8
+model_times_per_day   = 48
+ nudge_ucoef            = 0.25
+ nudge_uprof            = 2
+ nudge_vcoef            = 0.25
+ nudge_vprof            = 2
+ nudge_tprof = 0
+ nudge_PSprof=0
+ nudge_qprof=0
+ nudge_vwin_lindex = 0.
+ nudge_vwin_hindex = 24.
+ nudge_vwin_hdelta=.1
+ Nudge_Force_Opt = 1
+ Nudge_TimeScale_Opt = 0
+ nudge_PScoef=0
+ nudge_Tcoef=0
+ nudge_qcoef=0
+ nudge_vwin_ldelta=.1
+/
+
+! Suppress all default CAM history output -- only the fincl* lists below are
+! written, on the three explicit history tapes configured next.
+empty_htapes = .true.
+
+!-------------------------------------------------------------------------------
+! History tapes:
+!   h0 (tape 1) -- 6-hourly instantaneous, MMPPE.md mandatory 6-hourly table
+!   h1 (tape 2) -- 6-hourly instantaneous, MMPPE.md "(optional)" MODIS/COSP
+!                  table -- requires COSP built with the MODIS simulator on
+!   h2 (tape 3) -- monthly mean = "all 6h outputs except cosp" (i.e. h0's
+!                  fields, plus the non-cosp fields from h1's table, all
+!                  re-requested here at monthly-average frequency) PLUS the
+!                  Monthly Mean table's additional variables
+!
+! nhtfrq < 0 means "hours between samples"; nhtfrq = 0 means "monthly avg".
+! mfilt values below chunk output into manageable per-file sizes for a
+! 1-year run (4 samples/day for h0/h1 -> 120 = 30 days/file; h2 is already
+! monthly -> 12 = 1 file/year). Adjust to taste/storage constraints.
+!-------------------------------------------------------------------------------
+nhtfrq(1) = -6
+mfilt(1)  = 120
+
+nhtfrq(2) = -6
+mfilt(2)  = 120
+
+nhtfrq(3) = 0
+mfilt(3)  = 12
+
+!-------------------------------------------------------------------------------
+! Diagnostic ("double-call") radiation configuration for the aerosol-free TOA
+! flux fields (rsut_na, rsutcs_na, rlut_na, rlutcs_na). rad_diag_1 defines a
+! SECOND radiation call using only this species list -- with every aerosol
+! mode entry omitted, the call sees no aerosol at all, and CAM appends a
+! "_d1" suffix to every field from that call (FSUTOA_d1, FSUTOAC_d1, FLUT_d1,
+! FLUTC_d1 -- see src/physics/cam/rad_constituents.F90 and
+! src/physics/rrtmg/radiation.F90's diag(0:N_DIAG) array).
+!
+! Gas list below is the non-aerosol portion of test/system/nl_files/
+! rad_diag_mam's rad_diag_1 (a working example already in this repo's test
+! suite) -- gases are independent of the aerosol/mode scheme, so this should
+! carry over from that MAM3 test to this branch's MAM4 configuration
+! unchanged. CAVEAT: not yet cross-checked against this specific case's
+! resolved default rad_climate (e.g. whether stratospheric volcanic aerosol
+! feedback or an extra trace gas is active would add an entry there) --
+! recommend a one-time `case.setup` + inspecting CaseDocs/atm_in's rad_climate
+! value before a real run, to confirm no gas is missing here.
+!-------------------------------------------------------------------------------
+rad_diag_1 = 'A:Q:H2O', 'N:O2:O2', 'N:CO2:CO2', 'N:ozone:O3', 'N:N2O:N2O',
+   'N:CH4:CH4', 'N:CFC11:CFC11', 'N:CFC12:CFC12'
+
+!===============================================================================
+! fincl1 (h0): 6-hourly instantaneous -- MMPPE.md mandatory table
+!===============================================================================
+! aerosol_extinction_355nm -> EXTINCTUV       (APPROX: 350nm, no 355nm band)
+! TAU_2D_550nm             -> AODVIS          (EXACT, day only)
+! ABS_2D_550nm             -> AODABS          (EXACT, day only)
+! SSA_2D_440nm             -> SSAVIS          (APPROX: 550nm, no 440nm SSA)
+! ANG_440nm_670nm          -> ANGSTRM         (NONE-BEST proxy: 400-700nm)
+! TAU_2D_MODE_{KS,AS,CS,KI,AI,CI}_550nm
+!                          -> AODDUST, AODSO4, AODPOM, AODSOA, AODBC, AODSS
+!                             (NONE-BEST: MAM4 has no soluble/insoluble mode
+!                             split; nearest available is a per-SPECIES,
+!                             not per-mode, 550nm AOD decomposition)
+! burden_bc                -> BURDENBC        (EXACT, day only)
+! burden_du                -> BURDENDUST      (EXACT, day only)
+! burden_oc                -> BURDENPOM       (EXACT, day only)
+! burden_so4                -> BURDENSO4      (EXACT, day only)
+! burden_ss                -> BURDENSEASALT   (EXACT, day only)
+! burden_wat                -> wat_a1..a4     (DERIVED: sum + vertically
+!                             integrate in post-processing)
+! burden_icnc              -> TMNUMICE        (APPROX: unit-label caveat,
+!                             see mapping file)
+! burden_cdnc              -> TMNUMLIQ        (APPROX, same caveat)
+! CN_BURDEN                -> TMnum_a1..a4    (NONE-BEST: unthresholded total
+!                             number burden, not the >100nm-radius cutoff
+!                             the protocol specifies)
+! CCN_BURDEN_0.100          -> CCN3            (DERIVED: vertically integrate)
+! CCN_BURDEN_0.300          -> CCN7COL         (EXACT)
+! CCN_BL1_0.100             -> CCN3            (DERIVED: interpolate to 1km AGL)
+! CCN_BL1_0.300             -> CCN7BL          (EXACT)
+! CCNS_0.100                -> CCN3            (CLOSE: lowest model level)
+! CCNS_0.300                -> CCN7            (EXACT: lowest model level)
+! SO4                       -> so4_a1,so4_a2,so4_a3 (DERIVED: sum, x density)
+! ND_INCL_CT                -> ACTNL, FCTL, ACTNL_OVL, FCTL_OVL (CLOSE:
+!                             grid-mean; in-cloud value = ACTNL/FCTL or
+!                             ACTNL_OVL/FCTL_OVL)
+! CDR_CT                    -> ACTREL, ACTREL_OVL (EXACT)
+! ICR_CT                    -> ACTREI, ACTREI_OVL (EXACT)
+! clt                       -> CLDTOT          (EXACT)
+! lcc                       -> FCTL            (APPROX: cloud-TOP liquid
+!                             occurrence, not total-column liquid fraction)
+! icc                       -> FCTI            (APPROX, same caveat)
+! cod                       -> TOT_CLD_VISTAU  (APPROX+DERIVED: per-layer,
+!                             needs column reduction)
+! codliq                    -> LIQ_ICLD_VISTAU (APPROX+DERIVED)
+! codice                    -> ICE_ICLD_VISTAU (APPROX+DERIVED)
+! cllvi                     -> TGCLDLWP        (EXACT)
+! clivi                     -> TGCLDIWP        (EXACT)
+! pr                        -> PRECT           (CLOSE: m/s -> x1000 kg/m2/s)
+! PM2.5                     -> PM25_SRF        (EXACT)
+! BC                        -> bc_a1, bc_a4    (DERIVED: sum, x density)
+! rsdt                      -> SOLIN           (EXACT)
+! rsut                      -> FSUTOA          (EXACT)
+! rsutcs                    -> FSUTOAC         (EXACT)
+! rlut                      -> FLUT            (EXACT)
+! rlutcs                    -> FLUTC           (EXACT)
+! rsut_na                   -> FSUTOA_d1       (CONFIG-DEPENDENT: needs
+!                             rad_diag_1 above)
+! rsutcs_na                 -> FSUTOAC_d1      (CONFIG-DEPENDENT)
+! rlut_na                   -> FLUT_d1         (CONFIG-DEPENDENT)
+! rlutcs_na                 -> FLUTC_d1        (CONFIG-DEPENDENT)
+! wbase                     -> WSUB            (APPROX: general activation
+!                             updraft diagnostic, not cloud-base-specific)
+! CTH                       -> CLDHGT, PCLDTOP (APPROX / DERIVED input)
+! CBH                       -> PCLDBOT         (NONE-BEST: hydrostatic
+!                             pressure->height conversion needed offline)
+!
+! PM1, PM10, N70, N100, LTS, CTT -- NOT AVAILABLE, see comment block at end.
+!-------------------------------------------------------------------------------
+fincl1 = 'EXTINCTUV:I',
+   'AODVIS:I', 'AODABS:I', 'SSAVIS:I', 'ANGSTRM:I',
+   'AODDUST:I', 'AODSO4:I', 'AODPOM:I', 'AODSOA:I', 'AODBC:I', 'AODSS:I',
+   'BURDENBC:I', 'BURDENDUST:I', 'BURDENPOM:I', 'BURDENSO4:I', 'BURDENSEASALT:I',
+   'wat_a1:I', 'wat_a2:I', 'wat_a3:I', 'wat_a4:I',
+   'TMNUMICE:I', 'TMNUMLIQ:I',
+   'TMnum_a1:I', 'TMnum_a2:I', 'TMnum_a3:I', 'TMnum_a4:I',
+   'CCN3:I', 'CCN7COL:I', 'CCN7BL:I', 'CCN7:I',
+   'so4_a1:I', 'so4_a2:I', 'so4_a3:I',
+   'ACTNL:I', 'FCTL:I', 'ACTNL_OVL:I', 'FCTL_OVL:I',
+   'ACTREL:I', 'ACTREL_OVL:I', 'ACTREI:I', 'ACTREI_OVL:I',
+   'CLDTOT:I', 'FCTI:I',
+   'TOT_CLD_VISTAU:I', 'LIQ_ICLD_VISTAU:I', 'ICE_ICLD_VISTAU:I',
+   'TGCLDLWP:I', 'TGCLDIWP:I', 'PRECT:I',
+   'PM25_SRF:I', 'bc_a1:I', 'bc_a4:I',
+   'SOLIN:I', 'FSUTOA:I', 'FSUTOAC:I', 'FLUT:I', 'FLUTC:I',
+   'FSUTOA_d1:I', 'FSUTOAC_d1:I', 'FLUT_d1:I', 'FLUTC_d1:I',
+   'WSUB:I', 'CLDHGT:I', 'PCLDTOP:I', 'PCLDBOT:I'
+
+!===============================================================================
+! fincl2 (h1): 6-hourly instantaneous -- MMPPE.md "(optional)" MODIS table
+! Requires COSP built + MODIS simulator sub-package on; comment out this
+! whole tape (and nhtfrq(2)/mfilt(2) above) if COSP is not enabled for a
+! given case.
+!===============================================================================
+! modis_cloud_fraction_total -> CLTMODIS       (EXACT)
+! modis_cloud_fraction_water -> CLWMODIS       (EXACT)
+! modis_cloud_fraction_ice   -> CLIMODIS       (EXACT)
+! modis_cloud_fraction_low   -> CLLMODIS       (EXACT)
+! modis_cloud_fraction_mid   -> CLMMODIS       (EXACT)
+! modis_cloud_fraction_high  -> CLHMODIS       (EXACT)
+! modis_optical_thickness_total -> TAUTMODIS   (CLOSE: CLTMODIS-weighted)
+! modis_optical_thickness_water -> TAUWMODIS   (CLOSE: CLWMODIS-weighted)
+! modis_optical_thickness_ice   -> TAUIMODIS   (CLOSE: CLIMODIS-weighted)
+! modis_cloud_particle_size_water -> REFFCLWMODIS (CLOSE: unit is 'm', not
+!                             micron -- convert in post-processing)
+! modis_cloud_particle_size_ice   -> REFFCLIMODIS (CLOSE, same unit caveat)
+! modis_liquid_water_path    -> LWPMODIS       (CLOSE: CLWMODIS-weighted)
+! modis_ice_water_path       -> IWPMODIS       (CLOSE: CLIMODIS-weighted)
+! prw                        -> TMQ            (EXACT)
+! hfls                       -> LHFLX          (EXACT)
+! hfss                       -> SHFLX          (EXACT)
+! hdtcbl                     -> PBLH           (EXACT)
+! uas                        -> UBOT           (APPROX: lowest-level u, not
+!                             diagnosed at exactly 10m)
+! vas                        -> VBOT           (APPROX, same caveat)
+!
+! CTT -- NOT AVAILABLE, see comment block at end.
+!-------------------------------------------------------------------------------
+fincl2 = 'CLTMODIS:I', 'CLWMODIS:I', 'CLIMODIS:I', 'CLLMODIS:I', 'CLMMODIS:I',
+   'CLHMODIS:I', 'TAUTMODIS:I', 'TAUWMODIS:I', 'TAUIMODIS:I',
+   'REFFCLWMODIS:I', 'REFFCLIMODIS:I', 'LWPMODIS:I', 'IWPMODIS:I',
+   'TMQ:I', 'LHFLX:I', 'SHFLX:I', 'PBLH:I', 'UBOT:I', 'VBOT:I'
+
+!===============================================================================
+! fincl3 (h2): Monthly mean -- "all 6h outputs except cosp" (i.e. fincl1's
+! fields, plus fincl2's non-MODIS fields, both re-requested here as monthly
+! averages) PLUS the Monthly Mean table's own additional variables.
+!===============================================================================
+! -- fincl1 fields repeated at monthly-average frequency (same CESM field
+!    names as fincl1 above; not re-annotated here) --
+!
+! New Monthly Mean variables:
+! zg      -> Z3        (EXACT)
+! hur     -> RELHUM     (EXACT)
+! hus     -> Q          (EXACT)
+! cl      -> CLOUD      (EXACT)
+! cli     -> CLDICE     (EXACT)
+! clw     -> CLDLIQ     (EXACT)
+! wap     -> OMEGA      (EXACT)
+! ta      -> T          (EXACT)
+! pfull   -> PMID       (EXACT)
+! CDNC    -> NUMLIQ      (EXACT)
+! ICNC    -> NUMICE      (EXACT)
+! DMS     -> DMS         (CLOSE: mol/mol -> kg/kg conversion needed)
+! SO2     -> SO2         (CLOSE, same conversion)
+! OC (3D) -> pom_a1,pom_a4         (DERIVED: primary OC only, see mapping
+!                             file re: whether SOA should be included)
+! DU (3D) -> dst_a1,dst_a2,dst_a3   (DERIVED)
+! SS (3D) -> ncl_a1,ncl_a2,ncl_a3   (DERIVED)
+! lsm     -> LANDFRAC    (CLOSE: fractional, not strict binary)
+! albedo  -> ASDIR, ASDIF (NONE-BEST: surface vis albedo components; TOA
+!                             planetary-albedo alternative = FSUTOA/SOLIN,
+!                             both already in fincl -- clarify which
+!                             "albedo" definition the protocol wants before
+!                             relying on either)
+! ptp     -> TROP_P      (EXACT)
+! ps      -> PS          (EXACT)
+! psl     -> PSL         (EXACT)
+! prcr    -> PRECC       (CLOSE: liq+ice, m/s -> x1000 kg/m2/s)
+! prcs    -> PRECSC      (CLOSE)
+! prlr    -> PRECL       (CLOSE)
+! prls    -> PRECSL      (CLOSE)
+! ts      -> TS          (EXACT)
+! tas     -> TREFHT      (EXACT)
+! burden_dms -> TMDMS    (EXACT)
+! burden_so2 -> TMSO2    (EXACT)
+! CT_TIME -> FCTL,FCTI,FCTM (APPROX+DERIVED: sum; FCTL/FCTI already in
+!                             fincl1, FCTM added here)
+! emi_dms -> SFDMS       (EXACT)
+! emi_so2 -> SFSO2 (+ optionally SO2_CLXF for elevated/volcanic sources,
+!                             different units -- see mapping file)
+! emi_so4 -> SFso4_a1,SFso4_a2      (DERIVED)
+! emi_bc  -> SFbc_a4     (EXACT, as a total)
+! emi_oc  -> SFpom_a4    (EXACT, as a total)
+! emi_du  -> SFdst_a1,SFdst_a2,SFdst_a3 (DERIVED)
+! emi_ss  -> SFncl_a1,SFncl_a2,SFncl_a3 (DERIVED)
+! ANG_550nm_865nm -> ANGSTRM_550_865 (CLOSE, day only)
+! ABS_COMP_BC_550nm -> AODABSBC (EXACT, day only)
+! TAU_COMP_{BC,OC,SO4,DU,SS}_550nm -> AODBC,AODPOM,AODSO4,AODDUST,AODSS
+!                             (EXACT, day only -- already in fincl1 above)
+!
+! emi_bb_so2/bc/oc, dzhalf, rho, dew2, ABS_COMP_{OC,SO4,DU,SS,WAT}_550nm,
+! TAU_COMP_WAT_550nm, TAU_2D_MODE_*, ABS_2D_MODE_* -- NOT AVAILABLE, see
+! comment block at end.
+!-------------------------------------------------------------------------------
+fincl3 = 'EXTINCTUV:A',
+   'AODVIS:A', 'AODABS:A', 'SSAVIS:A', 'ANGSTRM:A',
+   'AODDUST:A', 'AODSO4:A', 'AODPOM:A', 'AODSOA:A', 'AODBC:A', 'AODSS:A',
+   'BURDENBC:A', 'BURDENDUST:A', 'BURDENPOM:A', 'BURDENSO4:A', 'BURDENSEASALT:A',
+   'wat_a1:A', 'wat_a2:A', 'wat_a3:A', 'wat_a4:A',
+   'TMNUMICE:A', 'TMNUMLIQ:A',
+   'TMnum_a1:A', 'TMnum_a2:A', 'TMnum_a3:A', 'TMnum_a4:A',
+   'CCN3:A', 'CCN7COL:A', 'CCN7BL:A', 'CCN7:A',
+   'so4_a1:A', 'so4_a2:A', 'so4_a3:A',
+   'ACTNL:A', 'FCTL:A', 'ACTNL_OVL:A', 'FCTL_OVL:A',
+   'ACTREL:A', 'ACTREL_OVL:A', 'ACTREI:A', 'ACTREI_OVL:A',
+   'CLDTOT:A', 'FCTI:A',
+   'TOT_CLD_VISTAU:A', 'LIQ_ICLD_VISTAU:A', 'ICE_ICLD_VISTAU:A',
+   'TGCLDLWP:A', 'TGCLDIWP:A', 'PRECT:A',
+   'PM25_SRF:A', 'bc_a1:A', 'bc_a4:A',
+   'SOLIN:A', 'FSUTOA:A', 'FSUTOAC:A', 'FLUT:A', 'FLUTC:A',
+   'FSUTOA_d1:A', 'FSUTOAC_d1:A', 'FLUT_d1:A', 'FLUTC_d1:A',
+   'WSUB:A', 'CLDHGT:A', 'PCLDTOP:A', 'PCLDBOT:A',
+   'TMQ:A', 'LHFLX:A', 'SHFLX:A', 'PBLH:A', 'UBOT:A', 'VBOT:A',
+   'Z3:A', 'RELHUM:A', 'Q:A', 'CLOUD:A', 'CLDICE:A', 'CLDLIQ:A', 'OMEGA:A',
+   'T:A', 'PMID:A', 'NUMLIQ:A', 'NUMICE:A', 'DMS:A', 'SO2:A',
+   'pom_a1:A', 'pom_a4:A', 'dst_a1:A', 'dst_a2:A', 'dst_a3:A',
+   'ncl_a1:A', 'ncl_a2:A', 'ncl_a3:A',
+   'LANDFRAC:A', 'ASDIR:A', 'ASDIF:A',
+   'TROP_P:A', 'PS:A', 'PSL:A',
+   'PRECC:A', 'PRECSC:A', 'PRECL:A', 'PRECSL:A',
+   'TS:A', 'TREFHT:A', 'TMDMS:A', 'TMSO2:A', 'FCTM:A',
+   'SFDMS:A', 'SFSO2:A', 'SO2_CLXF:A',
+   'SFso4_a1:A', 'SFso4_a2:A', 'SFbc_a4:A', 'SFpom_a4:A',
+   'SFdst_a1:A', 'SFdst_a2:A', 'SFdst_a3:A',
+   'SFncl_a1:A', 'SFncl_a2:A', 'SFncl_a3:A',
+   'ANGSTRM_550_865:A', 'AODABSBC:A'
+
+!===============================================================================
+! NOT AVAILABLE: MMPPE protocol variables with no native CESM/CAM6 (MG2/MAM4)
+! history field and no reasonable post-processing derivation from existing
+! output (per MMPPE-info/6hourly_variable_mapping.txt and
+! monthly_mean_variable_mapping.txt's "NONE-BEST" entries with no formula
+! given). Deliberately NOT in any fincl list above -- listed here so nothing
+! is silently dropped. Each would need either new Fortran diagnostic code or
+! an offline calculation not implemented anywhere in this codebase.
+!
+!   N70, N100         -- size-thresholded (>70/100nm diameter) surface number
+!                        concentration; no size-binned diagnostic exists.
+!   PM1, PM10         -- only a 2.5um cutoff (PM25_SRF) is implemented.
+!   LTS               -- lower tropospheric stability; not output anywhere,
+!                        would be a purely offline calc from T(700hPa)/TS.
+!   CTT               -- warm cloud-top temperature; no cloud-top-temperature
+!                        field exists at all (do not substitute TREFHT).
+!   dzhalf            -- layer thickness; derive from Z3 differences or
+!                        hyai/hybi (not a history field) instead.
+!   rho               -- air density; derive from PMID/(Rd*Tv) using T,Q.
+!   dew2              -- 2m dewpoint; derive from TREFHT/Q2m/PS offline.
+!   emi_bb_so2/bc/oc  -- no field isolates the biomass-burning-only fraction
+!                        of SFSO2/SFbc_a4/SFpom_a4 (those are combined
+!                        anthro+bb totals); would need new outfld splitting
+!                        in mo_srf_emissions.F90, or a bb-scale=0 sensitivity
+!                        run diffed against control.
+!   ABS_COMP_OC/SO4/DU/SS/WAT_550nm -- CAM only decomposes absorption OD by
+!                        species for BC (AODABSBC); no equivalent exists for
+!                        the other species.
+!   TAU_COMP_WAT_550nm -- no water-specific AOD component field.
+!   TAU_2D_MODE_{KS,AS,CS,KI,AI,CI}_550nm,
+!   ABS_2D_MODE_{KS,AS,CS,KI,AI,CI}_550nm -- MAM4 has no soluble/insoluble
+!                        mode split (ECHAM-HAM-specific mode structure); the
+!                        per-SPECIES AOD fields (AODDUST/AODSO4/etc., already
+!                        in fincl1/fincl3) are the nearest available proxy.
+!===============================================================================

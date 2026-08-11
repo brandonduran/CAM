@@ -25,9 +25,10 @@ module fire_emissions
   public :: fire_emissions_init
   public :: fire_emissions_srf
   public :: fire_emissions_vrt
+  public :: fire_emissions_readnl
 
   ! for surface emissions
-  integer, allocatable :: fire_emis_indices_map(:) 
+  integer, allocatable :: fire_emis_indices_map(:)
 
   ! for vertically distributed forcings
   integer,  allocatable :: frc_spc_map(:)
@@ -40,9 +41,57 @@ module fire_emissions
   character(len=fieldname_len), allocatable :: fire_sflx_name(:)
   character(len=fieldname_len), allocatable :: fire_vflx_name(:)
 
+  ! ppe: emitted particle diameter for primary BC/OM aerosol number emissions
+  ! from biomass-burning (fire) sources, in nanometers. Defaults to the
+  ! previously hardcoded 134nm (0.134 micron) volume-mean diameter, see:
+  ! Liu et al, Toward a minimal representation of aerosols in climate models:
+  ! Description and evaluation in the Community Atmosphere Model CAM5.
+  ! Geosci. Model Dev., 5, 709-739, doi:10.5194/gmd-5-709-2012
+  ! and Table S1 in Supplement: http://www.geosci-model-dev.net/5/709/2012/gmd-5-709-2012-supplement.pdf
+  ! Only affects the "elevated" fire-forcing path (fire_emis_elevated=.true.),
+  ! which is what needs the online mass->number conversion this feeds into.
+  real(r8) :: emi_cmr_bb = 134._r8
+
 !================================================================================
 contains
 !================================================================================
+
+  !------------------------------------------------------------------------------
+  ! ppe: read the fire-emissions PPE namelist options
+  !------------------------------------------------------------------------------
+  subroutine fire_emissions_readnl(nlfile)
+
+    use namelist_utils, only : find_group_name
+    use units,           only : getunit, freeunit
+    use spmd_utils,      only : masterproc
+    use mpishorthand
+
+    character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
+
+    integer :: unitn, ierr
+    character(len=*), parameter :: subname = 'fire_emissions_readnl'
+
+    namelist /fire_emis_ppe_nl/ emi_cmr_bb
+
+    if (masterproc) then
+       unitn = getunit()
+       open( unitn, file=trim(nlfile), status='old' )
+       call find_group_name(unitn, 'fire_emis_ppe_nl', status=ierr)
+       if (ierr == 0) then
+          read(unitn, fire_emis_ppe_nl, iostat=ierr)
+          if (ierr /= 0) then
+             call endrun(subname // ':: ERROR reading namelist')
+          end if
+       end if
+       close(unitn)
+       call freeunit(unitn)
+    end if
+
+#ifdef SPMD
+    call mpibcast(emi_cmr_bb, 1, mpir8, 0, mpicom)
+#endif
+
+  end subroutine fire_emissions_readnl
 
   !------------------------------------------------------------------------------
   !------------------------------------------------------------------------------
@@ -58,18 +107,15 @@ contains
     character(len=32) :: spc_name
     character(len=32) :: num_name
 
-    real(r8), parameter :: demis_acc = 0.134e-6_r8 ! meters 
-    ! volume-mean emissions diameter of primary BC/OM aerosols, see :
-    ! Liu et al, Toward a minimal representation of aerosols in climate models: 
-    ! Description and evaluation in the Community Atmosphere Model CAM5. 
-    ! Geosci. Model Dev., 5, 709–739, doi:10.5194/gmd-5-709-2012
-    ! and Table S1 in Supplement: http://www.geosci-model-dev.net/5/709/2012/gmd-5-709-2012-supplement.pdf
-
-    real(r8), parameter :: x_numfact = 1.e-6_r8 * avogad * 6.0_r8 / (pi*(demis_acc**3))   ! 1.e-6 converts m-3 to cm-3. 
+    real(r8) :: demis_acc ! meters, see emi_cmr_bb above for description/reference
+    real(r8) :: x_numfact
     real(r8) :: specdens  ! kg/m3
     logical :: found
 
     if (shr_fire_emis_mechcomps_n<1) return
+
+    demis_acc = emi_cmr_bb * 1.e-9_r8 ! nm -> m
+    x_numfact = 1.e-6_r8 * avogad * 6.0_r8 / (pi*(demis_acc**3))   ! 1.e-6 converts m-3 to cm-3.
 
     if (shr_fire_emis_elevated) then ! initialize elevated forcings
 

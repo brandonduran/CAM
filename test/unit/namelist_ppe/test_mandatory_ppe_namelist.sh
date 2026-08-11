@@ -103,6 +103,7 @@ declare -a CASES=(
 # (see ppe_changes_incorporated.txt section 8).
 declare -a CASES_EXTRA=(
   "kappa_so4|kappa_so4=0.5"
+  "kappa_oc|kappa_oc=0.1"
   "micro_icefall|micro_mg_vtrmi_factor=1.3"
 )
 
