@@ -2373,6 +2373,7 @@ if ($chem =~ /_mam4/ and $phys =~ /cam6/) {
     add_default($nl, 'srf_emis_scale_oc_ant');
     add_default($nl, 'srf_emis_scale_oc_bb');
     add_default($nl, 'srf_emis_scale_dms');
+    add_default($nl, 'emi_cmr_ff');
     add_default($nl, 'emi_cmr_bb');
 
     # Vertical emission datasets:

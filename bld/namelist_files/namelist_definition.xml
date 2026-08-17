@@ -5206,6 +5206,17 @@ open-ocean/other and biomass-burning DMS emission files).
 Default: 1.0
 </entry>
 
+<entry id="emi_cmr_ff" type="real" category="cam_chem"
+       group="srf_emis_scale_nl" valid_values="" >
+PPE-tunable emitted count median radius (nm) for fossil-fuel BC/OC
+(bc_a4/pom_a4 anthropogenic) primary-carbon emissions. CAM has no native
+size knob; this rescales only the num_a4 companion number-emission flux
+(holding the bc_a4/pom_a4 mass flux fixed) via the cube-law relation
+between particle volume and radius, relative to the CAM6-native assumed
+radius baked into the num_a4 anthropogenic emission files.
+Default: 67.0 (CAM6-native, see scripts/emi_cmr_size_derivation.ipynb)
+</entry>
+
 <entry id="steady_state_ion_elec_temp" type="logical" category="waccmx"
        group="ion_electron_temp_nl" valid_values="" >
 If TRUE a steady state solution is used to calculate electron and
@@ -6549,12 +6560,17 @@ Default: TRUE
 
 <entry id="emi_cmr_bb" type="real" category="Fire_emissions"
        group="fire_emis_ppe_nl" valid_values="" >
-PPE-tunable emitted particle diameter (volume-mean) for primary BC/OM aerosol
-number emissions from biomass-burning (fire) sources, in nanometers. Only
-affects the "elevated" fire-forcing path (fire_emis_elevated=.true.), which
-derives the fire number-emission flux online from the mass flux using this
-assumed particle size.
-Default: 134 (nm)
+PPE-tunable emitted count median radius for primary BC/OM aerosol number
+emissions from biomass-burning (fire) sources, in nanometers (MMPPE protocol
+convention -- radius, not diameter; CAM6-native default corresponds to a
+134nm volume-mean diameter, see scripts/emi_cmr_size_derivation.ipynb).
+Affects the "elevated" interactive fire-forcing path (fire_emis_elevated=
+.true.), which derives the fire number-emission flux online from the mass
+flux using this assumed particle size, in fire_emissions.F90. Also imported
+by mo_srf_emissions.F90 to consistently perturb the num_a4 companion flux
+for the prescribed (CEDS/QFED) bb emission files, so one setting governs
+both pathways regardless of which is active for a given compset.
+Default: 67 (nm)
 </entry>
 
 <entry id="ndep_list" type="char*16(2)" category="Nitrogen Deposition"

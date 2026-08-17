@@ -12,9 +12,17 @@
 #   2. round-trip to the requested value in the generated atm_in file.
 #
 # It also runs one negative control (an unregistered variable name) to
-# prove the harness actually detects a real registration failure, and
-# checks the 2 still-deferred parameters (emi_cmr_ff, emi_cmr_bb) are
-# correctly reported as NOT YET IMPLEMENTED.
+# prove the harness actually detects a real registration failure.
+#
+# emi_cmr_ff/emi_cmr_bb (the last 2 of the mandatory 21) were completed
+# 2026-08-17: emi_cmr_bb already existed (fire_emissions.F90, for the
+# interactive/elevated fire-forcing path) but used a diameter convention;
+# corrected to radius (MMPPE protocol convention, confirmed via ECHAM's
+# mo_ham_m7_emissions.f90) and now also reused by mo_srf_emissions.F90 for
+# the prescribed-emission-file path. emi_cmr_ff is new, mo_srf_emissions.F90
+# only (no interactive-fire analog for fossil-fuel sources). See
+# scripts/emi_cmr_size_derivation.ipynb for the CAM6-native default (67nm)
+# derivation.
 #
 # Usage:
 #   test_mandatory_ppe_namelist.sh [-csmdata <inputdata_root>] [-keep]
@@ -97,6 +105,8 @@ declare -a CASES=(
   "conv_entrpen|zmconv_dmpdz=-2.0e-3"
   "rad_bc_ni|rad_bc_ni=0.5"
   "rad_oc_ni|rad_oc_ni=0.02"
+  "emi_cmr_ff|emi_cmr_ff=45.0"
+  "emi_cmr_bb|emi_cmr_bb=100.0"
 )
 
 # Recommended/Optional-list parameters implemented beyond the mandatory 21
@@ -105,12 +115,6 @@ declare -a CASES_EXTRA=(
   "kappa_so4|kappa_so4=0.5"
   "kappa_oc|kappa_oc=0.1"
   "micro_icefall|micro_mg_vtrmi_factor=1.3"
-)
-
-# Deferred parameters: expected to NOT be registered yet.
-declare -a DEFERRED=(
-  "emi_cmr_ff|emi_cmr_ff=30.0"
-  "emi_cmr_bb|emi_cmr_bb=75.0"
 )
 
 NPASS=0
@@ -161,7 +165,7 @@ run_case() {
     return 0
 }
 
-echo "=== Mandatory PPE parameters: implemented (20) ==="
+echo "=== Mandatory PPE parameters: implemented (all 21) ==="
 for c in "${CASES[@]}"; do
     label="${c%%|*}"
     varlist="${c#*|}"
@@ -193,30 +197,6 @@ for c in "${CASES_EXTRA[@]}"; do
     echo
 done
 
-echo "=== Deferred parameters: expected NOT registered (2) ==="
-NDEFER_OK=0
-NDEFER_UNEXPECTED=0
-for c in "${DEFERRED[@]}"; do
-    label="${c%%|*}"
-    varlist="${c#*|}"
-    var="${varlist%%=*}"
-    val="${varlist#*=}"
-    rm -f "$WORKDIR/atm_in" "$WORKDIR/drv_flds_in"
-    out=$(perl "$WORKDIR/bld/build-namelist" -s -config "$WORKDIR/config_cache.xml" \
-          -csmdata "$CSMDATA" -namelist "&camexp
- ${var} = ${val}
-/" 2>&1)
-    rc=$?
-    if [ $rc -ne 0 ]; then
-        echo "-- $label ($var): correctly NOT registered (build-namelist rejected it)"
-        NDEFER_OK=$((NDEFER_OK+1))
-    else
-        echo "-- $label ($var): UNEXPECTED -- build-namelist accepted a variable that should not exist yet!"
-        NDEFER_UNEXPECTED=$((NDEFER_UNEXPECTED+1))
-    fi
-done
-echo
-
 echo "=== Negative control: unregistered variable name ==="
 out=$(perl "$WORKDIR/bld/build-namelist" -s -config "$WORKDIR/config_cache.xml" \
       -csmdata "$CSMDATA" -namelist "&camexp
@@ -235,13 +215,9 @@ echo
 echo "============================================================"
 echo "SUMMARY"
 echo "============================================================"
-echo "Implemented mandatory params: $NPASS/$((NPASS+NFAIL)) passed"
+echo "Implemented mandatory + recommended/optional params: $NPASS/$((NPASS+NFAIL)) passed"
 if [ $NFAIL -gt 0 ]; then
     echo "  Failed: ${FAILED_NAMES[*]}"
-fi
-echo "Deferred params correctly unregistered: $NDEFER_OK/2"
-if [ "$NDEFER_UNEXPECTED" -gt 0 ]; then
-    echo "  WARNING: $NDEFER_UNEXPECTED deferred param(s) unexpectedly registered -- update this test's DEFERRED list."
 fi
 echo "Negative control (harness sanity check): $([ "$NEGCTRL_OK" -eq 1 ] && echo PASS || echo FAIL)"
 echo

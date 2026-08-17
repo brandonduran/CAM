@@ -213,11 +213,8 @@ where a similar knob was already added there.
   rad_bc_ni, rad_oc_ni -- BC/OC imaginary refractive index. Deferred here;
     implemented later, see section 9 below.
   emi_cmr_ff, emi_cmr_bb -- emitted particle size (count median radius)
-    for fossil-fuel/biomass-burning emissions. No knob in CAM6 or CAM7;
-    the assumed size is baked into separate, independently-prescribed
-    number-emission datasets. A proxy (scaling the num_a4_bc/num_a4_oc/
-    etc. number flux independently of mass, via the same mo_srf_emissions
-    mechanism as 6b) was proposed but deferred, not implemented.
+    for fossil-fuel/biomass-burning emissions. Deferred here; implemented
+    later, see section 10 below.
 
 6d. Bug fix (pre-existing, found while testing 6b/6e): namelist_defaults_cam.xml
   was missing a default entry for microp_aero_bulk_scale (2.D0). build-namelist
@@ -576,6 +573,95 @@ where a similar knob was already added there.
   not yet validated against real model output.
 
 
+10. emi_cmr_ff, emi_cmr_bb -- emitted count median radius for fossil-fuel
+  (ff) / biomass-burning (bb) primary-carbon (BC/OC only) emissions (the
+  last 2 of the mandatory-21 MMPPE parameters, deferred in section 6c).
+
+  Diagnosis: CAM has no native size knob for bc_a4/pom_a4 -- the num_a4
+  companion number-emission files bake in a fixed assumed size implicitly,
+  via their mass:number ratio. Derived directly from the actual CAM6 CEDS
+  default emission files (bc_a4_anthro/bb + num_bc_a4_anthro/bb, same for
+  pom_a4): the mass:number ratio is spatially exact-constant per file,
+  giving a 133.71nm volume-mean diameter -- matching the literal 0.134
+  micron diameter constant hardcoded in the (separate, QFED/FINN-based)
+  fire-emission-processing script ~/multimodel-erfaci/diagnostics/
+  redistribute_emiss_hires.ncl, sourced to Liu et al. 2012 (GMD, Table
+  S1), confirming both the derivation method and the value independently.
+  See scripts/emi_cmr_size_derivation.ipynb for the full worked derivation
+  (one representative ff and bb file pair), including the initial
+  kg-vs-gram unit bug caught by cross-checking against this reference.
+
+  IMPORTANT twist: the MMPPE protocol's Min/Max/Proposed values for
+  emi_cmr_ff/emi_cmr_bb are a RADIUS, not a diameter, despite CAM6's
+  baked-in value being a diameter and the "cmr" abbreviation itself
+  meaning "count median radius" -- confirmed by reviewing ECHAM's
+  reference implementation, ~/multimodel-erfaci/PPE_Project/MM_PPE_ECHAM/
+  src/mo_ham_m7_emissions.f90 (lines 258-266: cmr_ff/cmr_bb used directly
+  as a radius in the mass<->number conversion formula, applied only to
+  BC/id_bc and OC/id_oc -- SO4 uses entirely separate, non-ff/bb-split
+  cmr_sk/cmr_sa/cmr_sc parameters outside this knob's scope). CAM6-native
+  default is therefore 67nm (134/2), and the ratio-of-protocol-default
+  scaling gives CAM6-native ranges of [34,101]nm (ff) and [22,223]nm (bb)
+  -- see ~/LHS_example/CAM6_param_range_list.txt (updated 2026-08-17,
+  Changed=Yes for both).
+
+  Surprise finding during implementation: emi_cmr_bb already existed on
+  this branch, in fire_emissions.F90 (fire_emis_ppe_nl namelist group) --
+  used for the interactive/elevated CLM-coupled fire-forcing path
+  (fire_emis_elevated=.true.), an entirely different mechanism from the
+  prescribed CEDS/QFED netCDF files mo_srf_emissions.F90 reads. That
+  pre-existing implementation was correct in its physics (same Liu et al.
+  2012 formula/citation) but used the diameter convention (default 134),
+  and was never reflected in this file, CAM6_param_range_list.txt, or
+  test_mandatory_ppe_namelist.sh's DEFERRED list (which incorrectly
+  asserted build-namelist would reject emi_cmr_bb -- stale even before
+  today's changes). No emi_cmr_ff analog exists there since fossil-fuel
+  emissions aren't a CLM-computed quantity.
+
+  Implementation (BC/OC only -- confirmed against the ECHAM reference,
+  does NOT touch SO4/SO2 files, which use their own separate parameters):
+  - mo_srf_emissions.F90: new emi_cmr_ff (srf_emis_scale_nl, default 67).
+    get_srf_emis_ppe_scale's existing 'num_a4' case (see 6b) now also
+    multiplies by a cube-law factor (cmr_default_nm/emi_cmr_ff)**3 or
+    (cmr_default_nm/emi_cmr_bb)**3 (is_anthro/is_bb respectively), on top
+    of the existing bc/oc mass-parity factor -- scales only the num_a4
+    companion flux (num_a4_bc_srf_file, num_a4_oc_srf_file, num_a4_bb_srf_
+    file, num_pom_bb_srf_file), holding the bc_a4/pom_a4 mass flux fixed.
+    Computed inline (not precomputed at readnl time) to avoid an ordering
+    dependency: chem_readnl calls srf_emis_scale_readnl before
+    fire_emissions_readnl, so a value cached from emi_cmr_bb at
+    srf_emis_scale_readnl time would be stale.
+  - fire_emissions.F90: emi_cmr_bb made public and reused (not re-read) by
+    mo_srf_emissions.F90, so one namelist setting perturbs both the
+    interactive and prescribed bb pathways consistently. Radius/diameter
+    bug fixed: demis_acc (internal diameter) now computed as
+    2*emi_cmr_bb*1e-9 instead of emi_cmr_bb*1e-9; default changed 134->67.
+    Default physical behavior is unchanged (still 134nm diameter
+    internally) -- only the namelist units/semantics changed.
+  - namelist_definition.xml: new emi_cmr_ff entry (group=srf_emis_scale_nl);
+    existing emi_cmr_bb entry (group=fire_emis_ppe_nl, category=
+    Fire_emissions) updated to document the radius convention, new
+    default, and dual consumption by both modules. (No second emi_cmr_bb
+    entry added -- namelist variable names must be globally unique;
+    reusing the existing registration is the only valid option.)
+  - namelist_defaults_cam.xml: emi_cmr_ff/emi_cmr_bb both 67.D0. (A stray,
+    orphaned emi_cmr_bb default of 134.D0 with no matching
+    namelist_definition.xml entry -- inert, never reachable via
+    add_default -- was found here and replaced rather than duplicated.)
+  - build-namelist: add_default($nl, 'emi_cmr_ff') added alongside the
+    existing (also newly-noticed) add_default($nl, 'emi_cmr_bb') call.
+  - scripts/oat_parameters.csv: added as mandatory-category rows using the
+    corrected [34,101]/[22,223] CAM6-native ranges.
+  - test/unit/namelist_ppe/test_mandatory_ppe_namelist.sh: DEFERRED block
+    removed entirely (0 remain); both params moved into the main CASES
+    block. Verified: build-namelist accepts and round-trips both
+    (confirming no duplicate-ID conflict from reusing emi_cmr_bb), and
+    the no-override default case resolves both to 67.0. Result as of this
+    writing: 25/25 implemented mandatory+recommended/optional params
+    PASS, negative control PASS -- all 21 mandatory parameters now
+    implemented.
+
+
 Not yet done
 ------------------------------------------------------------
 - ppe-histogram-bins branch and clean-CAM branch both need pushing to
@@ -584,8 +670,9 @@ Not yet done
 - No compile/run test has been done in this environment -- recommend a
   short control run (MG2, no knobs perturbed) compared against the
   original new-ppe/clean-CAM baseline before using this branch for a
-  production PPE.
-- emi_cmr_ff, emi_cmr_bb (2 of the 21 MMPPE mandatory parameters) remain
-  unimplemented -- see 6c above.
+  production PPE. This is now especially relevant for emi_cmr_bb (section
+  10): the fire_emissions.F90 default change (134->67, compensated by the
+  formula fix) should reproduce identical default behavior, but has not
+  been runtime-verified, only checked via build-namelist round-tripping.
 - See section 7 above for MMPPE output-diagnostic items explicitly
   deferred this round (broader output_aerocom_aie.F90 port, CBH).

@@ -26,6 +26,7 @@ module fire_emissions
   public :: fire_emissions_srf
   public :: fire_emissions_vrt
   public :: fire_emissions_readnl
+  public :: emi_cmr_bb
 
   ! for surface emissions
   integer, allocatable :: fire_emis_indices_map(:)
@@ -41,16 +42,24 @@ module fire_emissions
   character(len=fieldname_len), allocatable :: fire_sflx_name(:)
   character(len=fieldname_len), allocatable :: fire_vflx_name(:)
 
-  ! ppe: emitted particle diameter for primary BC/OM aerosol number emissions
-  ! from biomass-burning (fire) sources, in nanometers. Defaults to the
-  ! previously hardcoded 134nm (0.134 micron) volume-mean diameter, see:
-  ! Liu et al, Toward a minimal representation of aerosols in climate models:
-  ! Description and evaluation in the Community Atmosphere Model CAM5.
-  ! Geosci. Model Dev., 5, 709-739, doi:10.5194/gmd-5-709-2012
-  ! and Table S1 in Supplement: http://www.geosci-model-dev.net/5/709/2012/gmd-5-709-2012-supplement.pdf
+  ! ppe: emitted count median RADIUS for primary BC/OM aerosol number
+  ! emissions from biomass-burning (fire) sources, in nanometers. Defaults to
+  ! 67nm, half of the previously hardcoded 134nm (0.134 micron) volume-mean
+  ! diameter -- the MMPPE protocol's emi_cmr_bb is defined as a radius (per
+  ! ECHAM's mo_ham_m7_emissions.f90 usage), not a diameter, so this is
+  ! converted to a diameter (x2) before use below. Source of the underlying
+  ! 134nm diameter default: Liu et al, Toward a minimal representation of
+  ! aerosols in climate models: Description and evaluation in the Community
+  ! Atmosphere Model CAM5. Geosci. Model Dev., 5, 709-739,
+  ! doi:10.5194/gmd-5-709-2012, Table S1 in Supplement:
+  ! http://www.geosci-model-dev.net/5/709/2012/gmd-5-709-2012-supplement.pdf
   ! Only affects the "elevated" fire-forcing path (fire_emis_elevated=.true.),
   ! which is what needs the online mass->number conversion this feeds into.
-  real(r8) :: emi_cmr_bb = 134._r8
+  ! Also imported by mo_srf_emissions.F90 to consistently perturb the
+  ! prescribed-emission-file num_a4 companion flux for the bb source
+  ! category (see get_srf_emis_ppe_scale there), so the same value governs
+  ! both the interactive and prescribed bb emission pathways.
+  real(r8) :: emi_cmr_bb = 67._r8
 
 !================================================================================
 contains
@@ -107,14 +116,14 @@ contains
     character(len=32) :: spc_name
     character(len=32) :: num_name
 
-    real(r8) :: demis_acc ! meters, see emi_cmr_bb above for description/reference
+    real(r8) :: demis_acc ! meters (diameter), see emi_cmr_bb above for description/reference
     real(r8) :: x_numfact
     real(r8) :: specdens  ! kg/m3
     logical :: found
 
     if (shr_fire_emis_mechcomps_n<1) return
 
-    demis_acc = emi_cmr_bb * 1.e-9_r8 ! nm -> m
+    demis_acc = 2._r8 * emi_cmr_bb * 1.e-9_r8 ! nm (radius) -> m (diameter)
     x_numfact = 1.e-6_r8 * avogad * 6.0_r8 / (pi*(demis_acc**3))   ! 1.e-6 converts m-3 to cm-3.
 
     if (shr_fire_emis_elevated) then ! initialize elevated forcings

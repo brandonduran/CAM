@@ -12,6 +12,7 @@ module mo_srf_emissions
   use ppgrid,        only : pcols, begchunk, endchunk
   use cam_logfile,   only : iulog
   use tracer_data,   only : trfld,trfile
+  use fire_emissions,only : emi_cmr_bb
 
   implicit none
 
@@ -51,6 +52,19 @@ module mo_srf_emissions
   real(r8) :: srf_emis_scale_oc_bb   = 1._r8
   real(r8) :: srf_emis_scale_dms     = 1._r8
 
+  ! ppe: emitted count median radius (nm) for fossil-fuel (ff) primary-carbon
+  ! (bc_a4/pom_a4 anthropogenic) emissions. CAM has no native size knob -- the
+  ! num_a4 companion number-emission files implicitly bake in a fixed assumed
+  ! radius (CAM6 default: 67 nm; see scripts/emi_cmr_size_derivation.ipynb).
+  ! Perturbing this namelist value rescales only the number flux (holding the
+  ! bc_a4/pom_a4 mass flux fixed) via the cube-law relation between particle
+  ! volume and radius, applied in get_srf_emis_ppe_scale below. The bb
+  ! counterpart, emi_cmr_bb, already exists as a PPE knob in fire_emissions.F90
+  ! (for the interactive/elevated fire-forcing path) -- imported above and
+  ! reused here so one namelist setting perturbs both code paths consistently.
+  real(r8), parameter :: cmr_default_nm = 67._r8
+  real(r8) :: emi_cmr_ff = cmr_default_nm
+
 contains
 
   !=============================================================================
@@ -70,7 +84,8 @@ contains
     namelist /srf_emis_scale_nl/ srf_emis_scale_so2_ant, srf_emis_scale_so2_bb, &
          srf_emis_scale_bc_ant, srf_emis_scale_bc_bb, &
          srf_emis_scale_oc_ant, srf_emis_scale_oc_bb, &
-         srf_emis_scale_dms
+         srf_emis_scale_dms, &
+         emi_cmr_ff
 
     if (masterproc) then
        unitn = getunit()
@@ -94,6 +109,7 @@ contains
     call mpibcast(srf_emis_scale_oc_ant,  1, mpir8, 0, mpicom)
     call mpibcast(srf_emis_scale_oc_bb,   1, mpir8, 0, mpicom)
     call mpibcast(srf_emis_scale_dms,     1, mpir8, 0, mpicom)
+    call mpibcast(emi_cmr_ff,             1, mpir8, 0, mpicom)
 #endif
 
   end subroutine srf_emis_scale_readnl
@@ -104,7 +120,10 @@ contains
   ! filename (CMIP6-style emission datasets keep anthro and bb sources in
   ! separate files per species). BC and OC's independently-prescribed number-
   ! emission files (species 'num_a4') are scaled by the same factor as their
-  ! parent mass species so the assumed emitted particle size is unaffected.
+  ! parent mass species so the assumed emitted particle size is unaffected by
+  ! a pure mass-rate perturbation, then further scaled by a cube-law factor
+  ! derived from emi_cmr_ff/emi_cmr_bb to represent an emitted-particle-size
+  ! perturbation at fixed mass emission rate.
   !=============================================================================
   function get_srf_emis_ppe_scale(species, filename) result(scale)
 
@@ -135,12 +154,14 @@ contains
     case ('pombb1_a4')
        scale = srf_emis_scale_oc_bb
     case ('num_a4')
+       ! cube-law: mass per particle ~ radius**3, so at a fixed mass emission
+       ! rate the number flux scales as (default_radius/target_radius)**3.
        if (index(filename, 'bc_a4') > 0) then
-          if (is_anthro) scale = srf_emis_scale_bc_ant
-          if (is_bb)     scale = srf_emis_scale_bc_bb
+          if (is_anthro) scale = srf_emis_scale_bc_ant * (cmr_default_nm/emi_cmr_ff)**3
+          if (is_bb)     scale = srf_emis_scale_bc_bb  * (cmr_default_nm/emi_cmr_bb)**3
        else if (index(filename, 'pom_a4') > 0) then
-          if (is_anthro) scale = srf_emis_scale_oc_ant
-          if (is_bb)     scale = srf_emis_scale_oc_bb
+          if (is_anthro) scale = srf_emis_scale_oc_ant * (cmr_default_nm/emi_cmr_ff)**3
+          if (is_bb)     scale = srf_emis_scale_oc_bb  * (cmr_default_nm/emi_cmr_bb)**3
        end if
     end select
 

@@ -1378,8 +1378,9 @@
 <srf_emis_scale_oc_bb    >1.D0</srf_emis_scale_oc_bb>
 <srf_emis_scale_dms      >1.D0</srf_emis_scale_dms>
 
-<!-- ppe: fire (biomass-burning) emitted particle diameter, nm -->
-<emi_cmr_bb              >134.D0</emi_cmr_bb>
+<!-- ppe: emitted count median radius (nm), fossil-fuel/biomass-burning primary carbon -->
+<emi_cmr_ff              >67.D0</emi_cmr_ff>
+<emi_cmr_bb              >67.D0</emi_cmr_bb>
 
 <!-- dust emission tuning factor -->
 <dust_emis_fact                                                         >0.37D0</dust_emis_fact>
